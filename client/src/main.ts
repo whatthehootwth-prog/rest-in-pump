@@ -12,6 +12,7 @@ import { RemotePlayers } from './net/remotes.ts';
 import { Hud } from './ui/hud.ts';
 import { ChatPanel } from './ui/chat.ts';
 import { NameTag } from './ui/nametag.ts';
+import { Landing } from './ui/landing.ts';
 import { prefs, sessionState } from './util/storage.ts';
 
 /** Yields so the loading text can paint. Background tabs get no animation frames, so don't wait for one there. */
@@ -37,6 +38,7 @@ async function main() {
   renderer.toneMappingExposure = 1.15;
 
   const input = new Input();
+  input.enabled = false;   // until the player enters from the intro screen
   let conn: Connection | null = null;
   const hud = new Hud({
     retry: () => conn?.retryNow(),
@@ -163,7 +165,6 @@ async function main() {
       case 'pong': break;
     }
   });
-  c.start();
 
   // ---- send our state ~15 times a second, only when something changed (plus a 1 s keep-alive)
   let lastSent: { s: PlayerState; at: number } | null = null;
@@ -176,6 +177,19 @@ async function main() {
     if (c.send({ t: 'state', s })) lastSent = { s, at: now };
   }, Math.round(1000 / STATE_SEND_HZ));
 
+  // ---- the intro screen: the world plays behind it; Enter joins the multiplayer world
+  let entered = false;
+  const enterWorld = () => {
+    entered = true;
+    input.enabled = true;
+    cam.follow();
+    canvas.focus();
+    c.start();
+  };
+  const landing = new Landing(enterWorld);
+  // a refresh while already in the world (session still alive) goes straight back in
+  const resuming = sessionState.token() !== null;
+
   // ---- render loop
   let last = performance.now(), t = 0;
   const pushers: THREE.Vector3[] = [];
@@ -183,12 +197,13 @@ async function main() {
     const now = performance.now();
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now; t += dt;
-    player.update(dt, t, input, cam.yaw, world.colliders);
+    player.update(dt, t, input, cam.yaw, world.colliders);   // input is ignored until entered
     syncEmoteButtons();
     selfTag.sprite.position.set(player.pos.x, player.height + 1.0, player.pos.z);
     selfTag.tick(now);
     remotes.update(dt, t);
-    cam.update(dt, input, player.pos, player.height, world.groundHeight);
+    if (entered) cam.update(dt, input, player.pos, player.height, world.groundHeight);
+    else cam.cinematic(t, world.groundHeight);
     pushers.length = 0; pushers.push(player.pos); remotes.positions(pushers);
     world.setGrassPushers(pushers);
     world.update(t, cam.camera, player.pos);
@@ -199,6 +214,7 @@ async function main() {
   requestAnimationFrame(frame);
   await nextFrame();
   hud.setLoading(null);
+  if (resuming) { landing.skip(); enterWorld(); } else landing.show();
 
   if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__rip = { player, remotes, conn: c, owl };
 }

@@ -4,20 +4,69 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0e0d12">
-  <meta name="description" content="REST IN PUMP — a multiplayer cartoon graveyard. Walk around with the other owls.">
+  <meta name="description" content="Welcome to the graveyard of fallen memecoins. Explore with other degens, bury your dead bags, and leave ridiculous offerings to honor your losses.">
   <title>R.I.P - Rest In Pump</title>
   <link rel="icon" href="/logo-32.png" sizes="32x32" type="image/png">
   <link rel="icon" href="/logo-64.png" sizes="64x64" type="image/png">
   <link rel="apple-touch-icon" href="/logo-180.png">
 </head>
-<body>
-  <canvas id="game" aria-label="The graveyard. Use the arrow keys to walk."></canvas>
+<body class="landing-open">
+  <canvas id="game" tabindex="-1" aria-label="The graveyard. Use the arrow keys to walk."></canvas>
 
   <div id="loading" class="loading" role="status" aria-live="polite">
     <img class="loading-logo" src="/logo-256.png" width="160" height="160" alt="">
     <div class="wordmark wordmark-lg">REST IN PUMP</div>
     <p id="loading-text">Loading the graveyard…</p>
   </div>
+
+  <section id="landing" class="landing" aria-labelledby="landing-title" hidden>
+    <div class="landing-inner">
+      <img class="landing-logo" src="/logo-256.png" width="148" height="148" alt="">
+      <h1 id="landing-title" class="landing-title">Rest In Pump</h1>
+      <p class="landing-desc">Welcome to the graveyard of fallen memecoins. Explore with other degens, bury your dead bags, and leave ridiculous offerings to honor your losses.</p>
+      <div class="landing-actions">
+        <button id="enter-btn" class="btn btn-lg" type="button">Enter the Meme Graveyard</button>
+        <button id="about-btn" class="btn btn-lg btn-quiet" type="button"><span class="q" aria-hidden="true">?</span>What is Rest In Pump?</button>
+      </div>
+      <p id="landing-online" class="landing-online" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <dialog id="about" aria-labelledby="about-title">
+    <div class="dialog-head">
+      <h2 id="about-title">What is Rest In Pump?</h2>
+      <button id="about-close" class="icon-btn" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg>
+      </button>
+    </div>
+    <section>
+      <p class="lead">A multiplayer graveyard for memecoins that went to zero. You are a confused little owl, and every other owl you meet is a real person who is online right now.</p>
+    </section>
+    <section>
+      <h3>What you can do today</h3>
+      <ul class="about-list">
+        <li><b>Wander the graveyard</b> with other degens. Every owl is born with its own ridiculous walk.</li>
+        <li><b>Mourn properly:</b> dance, club, pray (拜拜), kneel and cry, or roll around on the ground.</li>
+        <li><b>Chat</b> with everyone in the graveyard and see it pop up above their heads.</li>
+        <li><b>Take a snapshot</b> of the funeral and share it.</li>
+      </ul>
+    </section>
+    <section>
+      <h3>Coming soon <span class="tag">not live yet</span></h3>
+      <ul class="about-list">
+        <li><b>Bury a meme:</b> give your dead bag a grave of its own that stays in the graveyard for everyone to find.</li>
+        <li><b>Funerals and offerings:</b> leave ridiculous offerings at a grave, paid in $WTH and verified on NEAR.</li>
+        <li><b>Grave search:</b> find any buried coin and visit it.</li>
+        <li><b>Resurrections:</b> if a buried coin pumps back from the dead, its grave will know.</li>
+      </ul>
+      <p class="muted small">None of this is switched on yet, and nothing in the game asks for money today.</p>
+    </section>
+    <section>
+      <h3>Controls</h3>
+      <p class="small">Arrow keys or WASD to walk · Shift to run · Space to hop · 1–5 for emotes · P for a snapshot · Enter to chat · drag to turn the camera</p>
+    </section>
+    <p class="muted small about-foot">Not financial advice. Memecoins can go to zero — that's why this place exists.</p>
+  </dialog>
 
   <header class="hud-top">
     <div class="hud-right">

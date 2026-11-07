@@ -1,5 +1,7 @@
 /** Keyboard + on-screen pad state. Ignores keys while the player is typing in a field or a dialog is open. */
 export class Input {
+  /** False while the intro screen is up: the owl ignores the keyboard until the player enters. */
+  enabled = true;
   private readonly keys = new Set<string>();
   private readonly pressHandlers = new Map<string, () => void>();
 
@@ -8,7 +10,7 @@ export class Input {
     window.addEventListener('keydown', (e) => {
       if (Input.typing(e.target)) return;
       if (GAME_KEYS.has(e.code)) e.preventDefault();
-      if (!e.repeat) this.pressHandlers.get(e.code)?.();
+      if (!e.repeat && this.enabled) this.pressHandlers.get(e.code)?.();
       this.keys.add(e.code);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -24,7 +26,7 @@ export class Input {
   }
 
   down(...codes: string[]): boolean {
-    if (document.querySelector('dialog[open]')) return false;
+    if (!this.enabled || document.querySelector('dialog[open]')) return false;
     return codes.some((c) => this.keys.has(c));
   }
 

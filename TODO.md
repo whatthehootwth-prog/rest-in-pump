@@ -11,6 +11,7 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 - [x] Snapshot button (P) saves a PNG of the scene
 - [x] Chat (bottom left): server-relayed, validated, rate-limited, speech bubbles above heads
 - [x] Fixed low render resolution (no resolution setting)
+- [x] Intro scene: pitch, Enter the Meme Graveyard, What is Rest In Pump? explainer, real player count; joining happens only on Enter
 - [x] Project structure: Vite client, Node game server, shared validated protocol
 - [x] Multiplayer: real players see each other, synced movement, walk style and animation
 - [x] One shared graveyard for everyone (capacity 50 by default, `ROOM_CAPACITY`)

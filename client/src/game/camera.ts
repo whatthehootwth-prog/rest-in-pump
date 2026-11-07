@@ -32,13 +32,29 @@ export class CameraRig {
 
   snapTo(p: THREE.Vector3): void { this.target.set(p.x, 0.58, p.z); }
 
+  /** Slow orbit around the graveyard behind the intro screen. */
+  cinematic(t: number, groundHeight: (x: number, z: number) => number): void {
+    this.yaw = this.tYaw = 0.5 + t * 0.045;
+    this.pitch = this.tPitch = 0.2;
+    this.dist = this.tDist = 10;
+    this.target.set(0, 1.2, 3);
+    this.place(groundHeight);
+  }
+
+  /** Swoop from the orbit back down behind the player. */
+  follow(): void { this.tPitch = 0.22; this.tDist = 3.2; this.tYaw = Math.round(this.yaw / (Math.PI * 2)) * Math.PI * 2; }
+
   update(dt: number, input: Input, focus: THREE.Vector3, height: number, groundHeight: (x: number, z: number) => number): void {
     if (input.down('KeyQ')) this.tYaw += 1.8 * dt;
     if (input.down('KeyE')) this.tYaw -= 1.8 * dt;
     this.yaw = damp(this.yaw, this.tYaw, 10, dt);
     this.pitch = damp(this.pitch, this.tPitch, 10, dt);
     this.dist = damp(this.dist, this.tDist, 8, dt);
-    this.target.lerp(this.want.set(focus.x, 0.58 + height * 0.5, focus.z), 1 - Math.exp(-8 * dt));
+    this.target.lerp(this.want.set(focus.x, 0.58 + height * 0.5, focus.z), 1 - Math.exp(-6 * dt));
+    this.place(groundHeight);
+  }
+
+  private place(groundHeight: (x: number, z: number) => number): void {
     const cp = Math.cos(this.pitch), c = this.camera;
     c.position.set(
       this.target.x + Math.sin(this.yaw) * cp * this.dist,

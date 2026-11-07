@@ -193,3 +193,44 @@ input[aria-invalid="true"] { border-color: var(--bad); }
   .chat { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 126px); }
   .chat-log { max-height: 110px; }
 }
+
+/* ---------------------------------------------------------------- landing (the first scene) */
+body.landing-open .hud-top,
+body.landing-open .action-bar,
+body.landing-open .chat,
+body.landing-open .touch,
+body.landing-open #net-banner { display: none !important; }
+.landing {
+  position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; padding: 24px 16px;
+  background: radial-gradient(ellipse at center, rgba(10, 9, 14, 0.35) 0%, rgba(10, 9, 14, 0.82) 75%);
+  transition: opacity 0.35s ease;
+}
+.landing.leaving { opacity: 0; pointer-events: none; }
+.landing-inner { display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 560px; }
+.landing-logo { width: 148px; height: 148px; margin-bottom: 6px; }
+.landing-title { margin: 0 0 12px; font-size: clamp(30px, 6vw, 44px); font-weight: 800; letter-spacing: 0.02em; line-height: 1.05; }
+.landing-desc { margin: 0 0 26px; font-size: clamp(15px, 2.2vw, 17px); line-height: 1.55; color: #d9d6cf; text-wrap: balance; }
+.landing-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.btn-lg { height: 46px; padding: 0 22px; font-size: 15px; border-radius: 8px; }
+.btn-lg.btn-quiet { background: rgba(17, 16, 21, 0.75); }
+.btn .q {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 8px; border-radius: 50%;
+  border: 1.5px solid currentColor; font-size: 12px; font-weight: 800; line-height: 1;
+}
+.landing-online { min-height: 20px; margin: 18px 0 0; font-size: 13px; color: var(--muted); }
+.landing-online .dot { display: inline-block; margin-right: 7px; vertical-align: 1px; }
+
+#about { width: min(520px, calc(100vw - 24px)); }
+#about .lead { margin: 0; font-size: 15px; line-height: 1.55; }
+#about h3 .tag {
+  margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: #2b2a20; color: var(--focus);
+  font-size: 10px; letter-spacing: 0.06em;
+}
+.about-list { margin: 0; padding-left: 18px; display: grid; gap: 7px; font-size: 14px; line-height: 1.45; }
+.about-list b { font-weight: 650; }
+#about section p.small { margin: 10px 0 0; }
+.about-foot { padding: 12px 16px; margin: 0; }
+@media (max-width: 480px) {
+  .landing-actions { flex-direction: column; width: 100%; }
+  .landing-actions .btn { width: 100%; }
+}
