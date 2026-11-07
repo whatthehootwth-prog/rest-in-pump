@@ -51,8 +51,11 @@ kbd {
   pointer-events: none;
 }
 .hud-top > * { pointer-events: auto; }
-.brand { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.brand { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.brand-logo { display: block; width: 32px; height: 32px; }
+.brand-text { display: flex; flex-direction: column; gap: 2px; }
 .brand .muted { font-size: 12px; }
+.loading-logo { display: block; margin: 0 auto 6px; width: 160px; height: 160px; }
 .hud-right { display: flex; gap: 8px; align-items: center; }
 .chip {
   display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px;

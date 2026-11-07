@@ -6,20 +6,26 @@
   <meta name="theme-color" content="#0e0d12">
   <meta name="description" content="REST IN PUMP — a multiplayer cartoon graveyard. Walk around with the other owls.">
   <title>REST IN PUMP</title>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/logo-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/logo-64.png" sizes="64x64" type="image/png">
+  <link rel="apple-touch-icon" href="/logo-180.png">
 </head>
 <body>
   <canvas id="game" aria-label="The graveyard. Use the arrow keys to walk."></canvas>
 
   <div id="loading" class="loading" role="status" aria-live="polite">
+    <img class="loading-logo" src="/logo-256.png" width="160" height="160" alt="">
     <div class="wordmark wordmark-lg">REST IN PUMP</div>
     <p id="loading-text">Loading the graveyard…</p>
   </div>
 
   <header class="hud-top">
     <div class="brand">
-      <span class="wordmark">REST IN PUMP</span>
-      <span id="room-label" class="muted">Not connected</span>
+      <img class="brand-logo" src="/logo-64.png" width="32" height="32" alt="">
+      <div class="brand-text">
+        <span class="wordmark">REST IN PUMP</span>
+        <span id="room-label" class="muted">Not connected</span>
+      </div>
     </div>
     <div class="hud-right">
       <div id="online" class="chip" role="status" aria-live="polite">

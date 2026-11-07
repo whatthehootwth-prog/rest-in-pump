@@ -54,7 +54,9 @@ client/                Vite app
   src/game/            local player, input, camera
   src/net/             connection state machine, remote players + interpolation
   src/ui/              HUD, settings dialog, name tags
+brand/                 original logo artwork (client/public has the cropped icon sizes)
 prototype/             the original single-file prototype (reference only)
+TODO.md                roadmap checklist
 ```
 
 ## Multiplayer design
