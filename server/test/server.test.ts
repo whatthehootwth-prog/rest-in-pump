@@ -73,10 +73,12 @@ describe('game server', () => {
     await a.next('online', (m) => m.total === 2);
 
     const me = wb.players.find((p) => p.id === wb.you)!.state;
-    b.send({ t: 'state', s: { ...me, x: me.x + 0.2, speed: 1.8, walk: 4 } });
-    const snap = await a.next('snapshot', (m) => m.s.some((e) => e[0] === wb.you && e[7] === 4));
+    const otherWalk = (me.walk + 1) % 9;
+    b.send({ t: 'state', s: { ...me, x: me.x + 0.2, speed: 1.8, walk: otherWalk, emote: 1 } });
+    const snap = await a.next('snapshot', (m) => m.s.some((e) => e[0] === wb.you && e[8] === 1));
     const entry = snap.s.find((e) => e[0] === wb.you)!;
     expect(entry[1]).toBeCloseTo(me.x + 0.2, 1);
+    expect(entry[7]).toBe(me.walk);   // walk style can't be changed by the client
   });
 
   it('keeps a dropped player during the grace period and lets them resume', async () => {
@@ -142,7 +144,7 @@ describe('game server', () => {
     await junk.open();
     junk.ws.send('{"t":"state","s":"teleport"}');
     expect(await junk.next('error')).toMatchObject({ code: 'bad_message' });
-    junk.send({ t: 'state', s: { x: 0, y: 0, z: 0, yaw: 0, speed: 0, air: false, walk: 0 } });
+    junk.send({ t: 'state', s: { x: 0, y: 0, z: 0, yaw: 0, speed: 0, air: false, walk: 0, emote: 0 } });
     expect(await junk.next('error')).toMatchObject({ code: 'not_joined' });
 
     const evil = client(port, 'https://evil.example');
@@ -158,6 +160,20 @@ describe('game server', () => {
     expect(await b.next('error')).toMatchObject({ code: 'bad_name' });
     b.send({ t: 'rename', name: 'Bobby' });
     expect(await a.next('renamed')).toEqual({ t: 'renamed', id: wb.you, name: 'Bobby' });
+  });
+
+  it('relays chat to everyone in the room, with validation and a rate limit', async () => {
+    const port = await boot();
+    const a = client(port), b = client(port);
+    await a.hello({ name: 'Alice' });
+    const wb = await b.hello({ name: 'Bob' });
+    b.send({ t: 'chat', text: '  boo!  ' });
+    expect(await a.next('chat')).toMatchObject({ id: wb.you, name: 'Bob', text: 'boo!' });
+    expect(await b.next('chat')).toMatchObject({ text: 'boo!' });
+    b.send({ t: 'chat', text: '   ' });
+    expect(await b.next('error')).toMatchObject({ code: 'bad_chat' });
+    for (let i = 0; i < 3; i++) b.send({ t: 'chat', text: 'spam ' + i });
+    expect(await b.next('error', (m) => m.code === 'chat_too_fast')).toMatchObject({ fatal: false });
   });
 
   it('serves a health check', async () => {

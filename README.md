@@ -70,12 +70,16 @@ TODO.md                roadmap checklist
   several instances if `MAX_ROOMS` is raised, but the game UI has no room picker.
 - A dropped player keeps their slot, id and name for `RECONNECT_GRACE_MS`. The session token lives in
   `sessionStorage`, so a refresh or network blip resumes the same player; a duplicated tab gets a new one.
+- Every player gets a random walk style from the server on join; the server ignores any other value.
+- Emotes (dance, club, pray, cry, roll) are part of the synced player state.
+- Chat is relayed by the server to the room: cleaned (no control/zero-width characters), max 140 chars,
+  rate-limited (burst of 3, then one per 1.5 s). There is no chat history or moderation yet.
 - Abuse limits: 1 KB max message, token-bucket rate limit (40/s, burst 60), malformed messages counted
   toward disconnect, origin allow-list on the WebSocket, connection cap, ping/pong heartbeat.
 
 ## What is verified
 
-- `npm run check`: typecheck clean; 21 tests pass, including real WebSocket sessions for two players
+- `npm run check`: typecheck clean; 25 tests pass, including real WebSocket sessions for two players
   joining and seeing each other move, resume within the grace period, timeout after it, room capacity
   and overflow, room switching, outdated-client rejection, malformed input, foreign origins, renaming,
   and the health check.

@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
-  MAX_HOP_HEIGHT, MAX_SPEED, SPAWN, WALK_STYLE_COUNT, WORLD_RADIUS, isRoomId, roomNumber,
+  EMOTE_COUNT, MAX_HOP_HEIGHT, MAX_SPEED, SPAWN, WALK_STYLE_COUNT, WORLD_RADIUS, isRoomId, roomNumber,
   type ErrorCode, type PlayerInfo, type PlayerState, type RoomSummary,
 } from '../../shared/protocol.ts';
 
@@ -11,6 +11,7 @@ import {
  * - A player who drops keeps their slot, id and name for `graceMs` so a refresh or a flaky
  *   network can resume the same identity with the session token.
  * - Positions sent by clients are range-checked and speed-limited here.
+ * - Every player gets a random walk style on join and keeps it; clients cannot change it.
  */
 
 export interface Player {
@@ -22,6 +23,11 @@ export interface Player {
   disconnectedAt: number | null;
   state: PlayerState;
   lastStateAt: number;
+  /** Walk style assigned at join (fixed). */
+  walk: number;
+  /** Chat rate limit bucket. */
+  chatTokens: number;
+  chatRefill: number;
 }
 
 export interface RoomOptions {
@@ -54,14 +60,16 @@ export class RoomManager {
   join(name: string, preferred: string | null, now: number): JoinResult {
     const roomId = preferred ? this.resolvePreferred(preferred) : this.findOpenRoom();
     if (typeof roomId !== 'string') return { ok: false, code: roomId.code };
+    const walk = Math.min(WALK_STYLE_COUNT - 1, Math.floor(this.random() * WALK_STYLE_COUNT));
     const player: Player = {
+      walk, chatTokens: 3, chatRefill: now,
       id: randomUUID(),
       name,
       session: randomBytes(24).toString('base64url'),
       roomId,
       connected: true,
       disconnectedAt: null,
-      state: this.spawnState(),
+      state: this.spawnState(walk),
       lastStateAt: now,
     };
     this.roomMap(roomId).set(player.id, player);
@@ -123,7 +131,7 @@ export class RoomManager {
     old?.delete(id);
     if (old && old.size === 0 && from !== FIRST_ROOM) this.rooms.delete(from);
     p.roomId = target;
-    p.state = this.spawnState();
+    p.state = this.spawnState(p.walk);
     p.lastStateAt = now;
     this.roomMap(target).set(id, p);
     return { ok: true, from, to: target };
@@ -156,7 +164,8 @@ export class RoomManager {
       yaw: Math.atan2(Math.sin(s.yaw), Math.cos(s.yaw)),
       speed: Math.min(Math.max(s.speed, 0), MAX_SPEED * 1.1),
       air: s.air,
-      walk: Math.min(Math.max(Math.trunc(s.walk), 0), WALK_STYLE_COUNT - 1),
+      walk: p.walk,   // fixed per player, whatever the client says
+      emote: Math.min(Math.max(Math.trunc(s.emote), 0), EMOTE_COUNT),
     };
     p.lastStateAt = now;
     return p.state;
@@ -216,8 +225,19 @@ export class RoomManager {
     return null;
   }
 
-  private spawnState(): PlayerState {
+  /** Chat limit: bursts of 3, then one message every 1.5 s. */
+  allowChat(id: string, now: number): boolean {
+    const p = this.byId.get(id);
+    if (!p) return false;
+    p.chatTokens = Math.min(3, p.chatTokens + (now - p.chatRefill) / 1500);
+    p.chatRefill = now;
+    if (p.chatTokens < 1) return false;
+    p.chatTokens -= 1;
+    return true;
+  }
+
+  private spawnState(walk: number): PlayerState {
     const a = this.random() * Math.PI * 2, r = Math.sqrt(this.random()) * SPAWN.spread;
-    return { x: SPAWN.x + Math.cos(a) * r, y: 0, z: SPAWN.z + Math.sin(a) * r, yaw: 0, speed: 0, air: false, walk: 0 };
+    return { x: SPAWN.x + Math.cos(a) * r, y: 0, z: SPAWN.z + Math.sin(a) * r, yaw: 0, speed: 0, air: false, walk, emote: 0 };
   }
 }

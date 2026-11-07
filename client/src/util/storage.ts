@@ -19,13 +19,6 @@ export const prefs = {
   setName: (v: string) => set(local, 'rip.name', v),
   shadows: () => get(local, 'rip.shadows') !== '0',
   setShadows: (on: boolean) => set(local, 'rip.shadows', on ? '1' : '0'),
-  resolution: (): 'high' | 'balanced' | 'low' => {
-    const v = get(local, 'rip.resolution');
-    return v === 'balanced' || v === 'low' ? v : 'high';
-  },
-  setResolution: (v: string) => set(local, 'rip.resolution', v),
-  seenControls: () => get(local, 'rip.seenControls') === '1',
-  setSeenControls: () => set(local, 'rip.seenControls', '1'),
 };
 
 export const sessionState = {

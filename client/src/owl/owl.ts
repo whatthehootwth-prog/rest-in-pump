@@ -3,15 +3,22 @@ import { clamp, damp, lerp, lerpAngle, rr } from '../util/math.ts';
 import { blobShadowTexture } from '../util/textures.ts';
 import { EYES, RING, RIG, getOwlTemplate } from './model.ts';
 
-/** The walk styles, in the order F cycles through them. Index = PlayerState.walk on the wire. */
+/** The walk styles. Each player gets one at random from the server. Index = PlayerState.walk on the wire. */
 export const WALKS = [
   { id: 'goose', name: 'Goose kick' }, { id: 'noodle', name: 'Noodle legs' }, { id: 'flail', name: 'Panic flail' },
   { id: 'crab', name: 'Crab stomp' }, { id: 'zombie', name: 'Zombie shuffle' }, { id: 'windmill', name: 'Windmill arms' },
-  { id: 'pogo', name: 'Pogo hop' }, { id: 'spin', name: 'Ballerina spin' }, { id: 'disco', name: 'Disco point' }, { id: 'glitch', name: 'Glitch mode' },
+  { id: 'pogo', name: 'Pogo hop' }, { id: 'disco', name: 'Disco point' }, { id: 'glitch', name: 'Glitch mode' },
 ] as const;
 
 /** What drives one frame of animation (same for the local player and for remote players). */
+/** Emotes (index = PlayerState.emote; 0 = none). */
+export const EMOTES = [
+  { id: 'none', name: '' }, { id: 'dance', name: 'Dance' }, { id: 'club', name: 'Club' },
+  { id: 'pray', name: 'Pray' }, { id: 'cry', name: 'Cry' }, { id: 'roll', name: 'Roll' },
+] as const;
+
 export interface MotionInput {
+  emote: number;
   speed: number;
   phase: number;
   air: boolean;
@@ -29,14 +36,15 @@ export interface Owl {
 }
 
 const blobGeo = new THREE.CircleGeometry(0.4, 32);
+const tearGeo = (() => { const g = new THREE.SphereGeometry(0.045, 12, 8); g.scale(1, 1.5, 0.7); return g; })();
+let tearMat: THREE.MeshBasicMaterial | null = null;
 let blobMat: THREE.MeshBasicMaterial | null = null;
 
 /**
  * Creates one owl. Geometry and materials are shared with every other owl; only the scene graph and
- * animation state are per-instance. `autoWalk` makes the walk style rotate by itself (local player only;
- * remote players' styles come from the network).
+ * animation state are per-instance. The walk style comes from the server and never changes.
  */
-export function createOwl({ autoWalk = false, onWalkChange }: { autoWalk?: boolean; onWalkChange?: (i: number) => void } = {}): Owl {
+export function createOwl(): Owl {
   const tpl = getOwlTemplate();
   const root = tpl.root.clone(true);
   const node = (name: string) => {
@@ -62,9 +70,17 @@ export function createOwl({ autoWalk = false, onWalkChange }: { autoWalk?: boole
   };
   eyes.forEach(setPupil);
 
+  // tears (only visible while crying), in head units, just under each eye
+  tearMat ??= new THREE.MeshBasicMaterial({ color: 0x9fdcff, transparent: true, opacity: 0.9, depthWrite: false });
+  const tears = EYES.flatMap((e, i) => [0, 1].map((k) => {
+    const m = new THREE.Mesh(tearGeo, tearMat!);
+    m.visible = false; head.add(m);
+    return { m, x: e.x + (k ? 0.05 : -0.05), y: e.y - e.r * 0.8, ph: i * 0.37 + k * 0.5 };
+  }));
+
   const st = {
     act: 'none', actT: 0, actDur: 1, timer: rr(1, 4), tilt: 0, look: [0, 0], turn: 0, mouth: 0.2,
-    blinkT: rr(1, 4), blink: 0, walkT: 0, gT: 0, g: new Array<number>(12).fill(0),
+    blinkT: rr(1, 4), blink: 0, gT: 0, g: new Array<number>(12).fill(0),
   };
 
   const owl: Owl = {
@@ -72,8 +88,7 @@ export function createOwl({ autoWalk = false, onWalkChange }: { autoWalk?: boole
     setWalk(i: number) {
       const w = ((Math.trunc(i) % WALKS.length) + WALKS.length) % WALKS.length;
       if (w === owl.walk) return;
-      owl.walk = w; st.walkT = 0;
-      onWalkChange?.(w);
+      owl.walk = w;
     },
     dispose() { root.removeFromParent(); blob.removeFromParent(); },
     animate(dt, t, p) {
@@ -92,10 +107,9 @@ export function createOwl({ autoWalk = false, onWalkChange }: { autoWalk?: boole
       const act = st.actT > 0 ? st.act : 'none', scream = act === 'scream' ? 1 : 0;
 
       // legs + arms: one of many ridiculous walks
-      if (autoWalk && walk > 0.3) { st.walkT += dt; if (st.walkT > 8) owl.setWalk(owl.walk + 1); }
       const style = WALKS[owl.walk].id, run = 1 + 0.35 * runA;
       const up = Math.max(air, scream);
-      let lean = 0, twist = 0, sway = 0.12, bob = 0.06, hop = 0, spin = false, peck = 0;
+      let lean = 0, twist = 0, sway = 0.12, bob = 0.06, hop = 0, peck = 0;
       if (style === 'glitch') { st.gT -= dt; if (st.gT < 0) { st.gT = rr(0.07, 0.2); st.g = st.g.map(() => rr(-1, 1)); } twist = st.g[0] * 0.7; sway = 0.3; }
       for (const s of [-1, 1]) {
         const ph = p.phase + (s > 0 ? 0 : Math.PI), sp = Math.sin(ph), cp = Math.cos(ph), g = st.g, k = s > 0 ? 0 : 6;
@@ -125,9 +139,6 @@ export function createOwl({ autoWalk = false, onWalkChange }: { autoWalk?: boole
           case 'pogo':
             lx = s > 0 ? 0.05 : 1.1 + Math.sin(t * 9) * 0.25; lz = s > 0 ? 0.0 : 0.25;
             ax = -0.4; az = 1.3 + Math.sin(t * 22 + s) * 0.9; as = 1.15; hop = Math.abs(Math.sin(p.phase)) * 0.28; lean = 0.15; bob = 0; break;
-          case 'spin':
-            lx = s > 0 ? sp * 0.25 : 1.0; lz = s > 0 ? 0.05 : 0.15; ls = s > 0 ? 1 : 1.2;
-            ax = -0.15; az = 2.45; as = 1.15; spin = true; bob = 0.03; break;
           case 'disco':
             lx = sp * 0.4; lz = 0.12 + 0.3 * Math.sin(ph * 2);
             if (s > 0) { const hi = Math.sin(p.phase * 0.5) > 0; ax = -0.35; az = hi ? 2.7 : 0.75; as = 1.35; }
@@ -148,14 +159,14 @@ export function createOwl({ autoWalk = false, onWalkChange }: { autoWalk?: boole
         arm.rotation.z = damp(arm.rotation.z, s * (0.12 + az * walk * (1 - up) + flail), snap, dt);
         arm.scale.y = damp(arm.scale.y, lerp(1, as, walk) + up * 0.4, snap, dt);
       }
-      rig.position.y = damp(rig.position.y, hop * walk, 25, dt);
+      const lying = p.emote === 5 && walk < 0.3 && !p.air ? 0.13 : 0;   // rolling on the ground
+      rig.position.y = damp(rig.position.y, hop * walk + lying, 25, dt);
 
       // body: waddle, bounce, squash & stretch, shake while screaming, twirl for the ballerina
       body.position.y = HIP + Math.abs(cw) * bob * walk + 0.006 * Math.sin(t * 2.2) * (1 - walk);
       body.rotation.z = damp(body.rotation.z, sw * (sway + 0.05 * runA) * walk + scream * Math.sin(t * 70) * 0.04, 12, dt);
       body.rotation.x = damp(body.rotation.x, (lean + 0.1 * runA) * walk - air * 0.08 - scream * 0.1, 6, dt);
-      if (spin && walk > 0.25) body.rotation.y = (t * 7.5) % (Math.PI * 2);
-      else body.rotation.y = lerpAngle(body.rotation.y, twist * walk, 1 - Math.exp(-(style === 'glitch' ? 40 : 10) * dt));
+      body.rotation.y = lerpAngle(body.rotation.y, twist * walk, 1 - Math.exp(-(style === 'glitch' ? 40 : 10) * dt));
       const stretch = air * clamp(p.vy * 0.04, -0.12, 0.16);
       const q = p.land * 0.2 - stretch + (1 - Math.abs(cw)) * 0.04 * walk;
       body.scale.set(1 + q * 0.6, 1 - q, 1 + q * 0.6);
@@ -168,8 +179,81 @@ export function createOwl({ autoWalk = false, onWalkChange }: { autoWalk?: boole
       head.position.y = RIG.headY + Math.abs(sw) * 0.02 * walk;
       head.position.z = peck * walk * Math.sin(p.phase * 2) * 0.07;
 
+      // emotes (only while standing on the ground)
+      const em = p.emote > 0 && walk < 0.3 && !p.air ? EMOTES[p.emote].id : 'none';
+      let emOpen: number | null = null, squint = 1, roll = false, crying = false;
+      const k = 14;
+      const armTo = (s: number, x: number, z: number) => {
+        arms[s].rotation.x = damp(arms[s].rotation.x, x, k, dt);
+        arms[s].rotation.z = damp(arms[s].rotation.z, s * z, k, dt);
+      };
+      const legTo = (s: number, x: number, z: number) => {
+        legs[s].rotation.x = damp(legs[s].rotation.x, x, k, dt);
+        legs[s].rotation.z = damp(legs[s].rotation.z, s * z, k, dt);
+      };
+      if (em === 'dance') {                       // arms take turns going up, hips swing, little hops
+        const b = t * Math.PI * 2 * 1.8;
+        armTo(1, Math.sin(b * 0.5) * 0.5, 2.3 + Math.sin(b) * 0.5);
+        armTo(-1, Math.sin(b * 0.5 + 1) * 0.5, 1.0 + Math.sin(b + Math.PI) * 0.9);
+        for (const s of [-1, 1]) legTo(s, 0, 0.08 + Math.max(0, Math.sin(b + (s > 0 ? 0 : Math.PI))) * 0.4);
+        body.position.y = HIP + Math.abs(Math.sin(b)) * 0.07;
+        body.rotation.z = damp(body.rotation.z, Math.sin(b * 0.5) * 0.28, k, dt);
+        body.rotation.y = damp(body.rotation.y, Math.sin(b * 0.25) * 0.7, k, dt);
+        neck.rotation.z = damp(neck.rotation.z, Math.sin(b) * 0.25, k, dt);
+        emOpen = 0.55 + Math.sin(b) * 0.2;
+      } else if (em === 'club') {                 // fist pumping, head banging, bouncing to 128 bpm
+        const b = t * Math.PI * 2 * 2.13;
+        armTo(1, -0.3, 2.6 + (Math.sin(b) > 0 ? 0.35 : -0.35));
+        armTo(-1, 0.5, 0.5 + Math.abs(Math.sin(b)) * 0.35);
+        for (const s of [-1, 1]) legTo(s, -Math.max(0, Math.sin(b + (s > 0 ? 0 : Math.PI))) * 0.35, 0.06);
+        body.position.y = HIP - Math.abs(Math.sin(b)) * 0.05;
+        body.rotation.x = damp(body.rotation.x, 0.12, k, dt);
+        neck.rotation.x = Math.sin(b * 2) * 0.45;
+        emOpen = 0.85;
+      } else if (em === 'pray') {                 // 拜拜: hands together, bowing over and over
+        const bow = (1 - Math.cos((t * Math.PI * 2) / 1.8)) / 2;
+        for (const s of [-1, 1]) { armTo(s, -1.35 + bow * 0.3, -0.6); legTo(s, 0, 0.04); }
+        body.rotation.x = damp(body.rotation.x, bow * 0.7, k, dt);
+        body.rotation.z = damp(body.rotation.z, 0, k, dt);
+        neck.rotation.x = damp(neck.rotation.x, bow * 0.3, k, dt);
+        emOpen = 0.05; squint = bow > 0.6 ? 0.1 : 1;
+      } else if (em === 'cry') {                  // hands on eyes, sobbing, wailing, tears
+        const sob = Math.sin(t * 18) * 0.08;
+        for (const s of [-1, 1]) { armTo(s, -2.5 + sob, -0.5); legTo(s, 0, 0.06); }
+        body.position.y = HIP + Math.abs(Math.sin(t * 9)) * 0.018;
+        body.rotation.x = damp(body.rotation.x, 0.15, k, dt);
+        body.rotation.z = damp(body.rotation.z, Math.sin(t * 9) * 0.03, k, dt);
+        neck.rotation.x = damp(neck.rotation.x, 0.22 + Math.sin(t * 9) * 0.04, k, dt);
+        emOpen = 0.85 + Math.sin(t * 6) * 0.2; squint = 0.3; crying = true;
+      } else if (em === 'roll') {                 // 滚来滚去: lying down, rolling back and forth, flailing
+        roll = true;
+        const r = Math.sin(t * 2.6);
+        rig.rotation.x = damp(rig.rotation.x, -1.5, 8, dt);
+        rig.rotation.y = damp(rig.rotation.y, r * 2.4, 10, dt);
+        rig.position.x = damp(rig.position.x, r * 0.3, 10, dt);
+        rig.position.z = damp(rig.position.z, 0.42, 8, dt);
+        for (const s of [-1, 1]) {
+          armTo(s, Math.sin(t * 13 + s) * 0.8, 1.2 + Math.sin(t * 14 + s) * 0.8);
+          legTo(s, Math.sin(t * 12 + (s > 0 ? 0 : Math.PI)) * 0.6, 0.1);
+        }
+        emOpen = 1.05;
+      }
+      if (!roll) {
+        rig.rotation.x = damp(rig.rotation.x, 0, 10, dt);
+        rig.rotation.y = damp(rig.rotation.y, 0, 10, dt);
+        rig.position.x = damp(rig.position.x, 0, 10, dt);
+        rig.position.z = damp(rig.position.z, 0, 10, dt);
+      }
+      for (const tr of tears) {
+        tr.m.visible = crying;
+        if (!crying) continue;
+        const f = (t * 1.6 + tr.ph) % 1;
+        tr.m.position.set(tr.x + Math.sin(f * 6) * 0.01, tr.y - f * 0.4, 0.42 - f * 0.06);
+        tr.m.scale.setScalar(1 - f * 0.4);
+      }
+
       // mouth + tongue
-      const open = clamp(0.1 + walk * (0.25 + 0.22 * Math.sin(t * 13)) + scream * 1.0 + air * 0.75, 0, 1.15);
+      const open = emOpen ?? clamp(0.1 + walk * (0.25 + 0.22 * Math.sin(t * 13)) + scream * 1.0 + air * 0.75, 0, 1.15);
       st.mouth = damp(st.mouth, open, 16, dt);
       mandible.rotation.x = tpl.mandibleRest - 0.25 * st.mouth;
       tongue.rotation.z = 0.12 + Math.sin(t * (scream ? 40 : 6)) * (0.1 + 0.25 * scream);
@@ -178,7 +262,7 @@ export function createOwl({ autoWalk = false, onWalkChange }: { autoWalk?: boole
       st.blinkT -= dt;
       if (st.blinkT < 0) { st.blinkT = Math.random() < 0.2 ? 0.25 : rr(2, 5); st.blink = 0.16; }
       st.blink -= dt;
-      const lid = st.blink > 0 && !scream ? 0.07 : 1;
+      const lid = Math.min(st.blink > 0 && !scream ? 0.07 : 1, squint);
       for (const ee of eyes) {
         ee.grp.scale.y = damp(ee.grp.scale.y, scream ? 1.18 : lid, 40, dt);
         ee.grp.scale.x = damp(ee.grp.scale.x, scream ? 1.12 : 1, 20, dt);

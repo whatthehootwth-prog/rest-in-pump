@@ -7,7 +7,7 @@ import type { Config } from './config.ts';
 import type { Logger } from './log.ts';
 import { RoomManager, type Player } from './rooms.ts';
 import {
-  MAX_CLIENT_MESSAGE_BYTES, PROTOCOL_VERSION, parseClientMessage, sanitizeName,
+  MAX_CLIENT_MESSAGE_BYTES, PROTOCOL_VERSION, parseClientMessage, sanitizeChat, sanitizeName,
   type ClientMessage, type ErrorCode, type ServerMessage, type SnapshotEntry,
 } from '../../shared/protocol.ts';
 
@@ -46,6 +46,8 @@ const ERROR_TEXT: Record<ErrorCode, string> = {
   unknown_room: 'That graveyard does not exist.',
   bad_name: 'Names must be 2-16 letters, numbers, spaces, dots, dashes or underscores.',
   rate_limited: 'Slow down — too many messages.',
+  bad_chat: 'Chat messages must be 1-140 characters.',
+  chat_too_fast: 'You are chatting too fast. Wait a moment.',
 };
 
 export async function startServer(cfg: Config, log: Logger): Promise<GameServer> {
@@ -120,6 +122,14 @@ export async function startServer(cfg: Config, log: Logger): Promise<GameServer>
         rooms.rename(p.id, name);
         broadcastRoom(p.roomId, { t: 'renamed', id: p.id, name });
         log.info('player renamed', { player: p.id, name });
+        return;
+      }
+      case 'chat': {
+        const text = sanitizeChat(msg.text);
+        if (!text) return sendError(c, 'bad_chat');
+        if (!rooms.allowChat(p.id, now)) return sendError(c, 'chat_too_fast');
+        broadcastRoom(p.roomId, { t: 'chat', id: p.id, name: p.name, text, ts: now });
+        log.debug('chat', { player: p.id, len: text.length });
         return;
       }
       case 'join_room': {
@@ -228,7 +238,7 @@ export async function startServer(cfg: Config, log: Logger): Promise<GameServer>
     const ts = Date.now();
     for (const roomId of dirtyRooms) {
       const s: SnapshotEntry[] = rooms.playersIn(roomId).filter((p) => p.connected).map((p) => [
-        p.id, r2(p.state.x), r2(p.state.y), r2(p.state.z), r3(p.state.yaw), r2(p.state.speed), p.state.air ? 1 : 0, p.state.walk,
+        p.id, r2(p.state.x), r2(p.state.y), r2(p.state.z), r3(p.state.yaw), r2(p.state.speed), p.state.air ? 1 : 0, p.state.walk, p.state.emote,
       ]);
       broadcastRoom(roomId, { t: 'snapshot', ts, s });
     }

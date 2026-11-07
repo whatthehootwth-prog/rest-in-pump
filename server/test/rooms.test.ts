@@ -3,7 +3,7 @@ import { RoomManager } from '../src/rooms.ts';
 import { MAX_SPEED, WORLD_RADIUS } from '../../shared/protocol.ts';
 
 const make = (capacity = 2, maxRooms = 3, graceMs = 1000) => new RoomManager({ capacity, maxRooms, graceMs });
-const state = (x: number, z: number) => ({ x, y: 0, z, yaw: 0, speed: 1, air: false, walk: 0 });
+const state = (x: number, z: number) => ({ x, y: 0, z, yaw: 0, speed: 1, air: false, walk: 0, emote: 0 });
 
 describe('RoomManager', () => {
   it('fills the first room, then opens the next one', () => {
@@ -62,6 +62,24 @@ describe('RoomManager', () => {
     expect(rm.move(a.player.id, 'graveyard-2', 0)).toEqual({ ok: false, code: 'room_full' });
     expect(rm.move(a.player.id, 'graveyard-3', 0)).toEqual({ ok: true, from: 'graveyard-1', to: 'graveyard-3' });
     expect(rm.playersIn('graveyard-3').map((p) => p.name)).toEqual(['A']);
+  });
+
+  it('gives each player a fixed walk style the client cannot change', () => {
+    const rm = new RoomManager({ capacity: 5, maxRooms: 1, graceMs: 1000 }, () => 0.99);
+    const a = rm.join('A', null, 0);
+    if (!a.ok) throw new Error();
+    expect(a.player.state.walk).toBe(8);
+    const s = rm.applyState(a.player.id, { ...a.player.state, walk: 2, emote: 3 }, 100)!;
+    expect(s.walk).toBe(8);
+    expect(s.emote).toBe(3);
+  });
+
+  it('rate-limits chat', () => {
+    const rm = make();
+    const a = rm.join('A', null, 0);
+    if (!a.ok) throw new Error();
+    expect([0, 0, 0, 0].map(() => rm.allowChat(a.player.id, 0))).toEqual([true, true, true, false]);
+    expect(rm.allowChat(a.player.id, 1600)).toBe(true);
   });
 
   it('clamps teleports, speed, height and the world edge', () => {

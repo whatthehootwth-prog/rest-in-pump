@@ -23,7 +23,7 @@ const MANDIBLE: P2[] = [[0, 0.004], [-0.094, -0.188], [-0.03, -0.163], [0.022, -
 const THROAT: P2[] = [[-0.09, -0.185], [-0.118, -0.262], [-0.03, -0.22], [0.05, -0.205], [0.07, -0.16], [0.062, -0.126]];
 
 /** Rig layout (rig units; the rig is scaled to 70%, so the owl stands ~0.9 m tall). */
-export const RIG = { scale: 0.7, hip: 0.405, headScale: 0.38, headY: 0.18 };
+export const RIG = { scale: 0.7, hip: 0.405, headScale: 0.34, headY: 0.155 };
 
 function mouthDist(x: number, y: number): number {
   const t = clamp((MOUTH_TOP.y - y) / 0.39, 0, 1), halfW = 0.135 * t;

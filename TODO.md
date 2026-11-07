@@ -5,15 +5,20 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 
 ## Done
 
-- [x] 3D graveyard world and owl mascot (cartoon style, flush open beak, 10 weird walks)
+- [x] 3D graveyard world and owl mascot (cartoon style, flush open beak, smaller head)
+- [x] Each player gets a random weird walk on join (9 styles, server-assigned, cannot be changed)
+- [x] Emote bar: Dance, Club, Pray (拜拜), Cry (tears), Roll (滚来滚去) — synced to everyone; keys 1–5
+- [x] Snapshot button (P) saves a PNG of the scene
+- [x] Chat (bottom left): server-relayed, validated, rate-limited, speech bubbles above heads
+- [x] Fixed low render resolution (no resolution setting)
 - [x] Project structure: Vite client, Node game server, shared validated protocol
 - [x] Multiplayer: real players see each other, synced movement, walk style and animation
 - [x] One shared graveyard for everyone (capacity 50 by default, `ROOM_CAPACITY`)
 - [x] Disconnect handling, 20 s resume window, refresh resumes the same player
 - [x] Reconnect with backoff and clear status banner (reconnecting / offline / full / outdated)
 - [x] Server checks: speed/teleport limits, world bounds, rate limits, origin allow-list, heartbeats
-- [x] Minimal HUD: real online count, name change, graphics settings (no top-left panel)
-- [x] Automated tests (21): protocol, rooms, two-client WebSocket integration
+- [x] Minimal HUD: real online count, name change, shadows toggle (no top-left panel)
+- [x] Automated tests (25): protocol, rooms, chat, fixed walk, two-client WebSocket integration
 - [x] Project logo (favicon, loading screen, HUD)
 - [x] Local git repo, author `wth <whatthehootwth@gmail.com>`
 
@@ -74,7 +79,7 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 - [ ] Load test: how many players the one graveyard handles smoothly
 - [ ] Test on phones (touch controls) and low-end laptops
 - [ ] Terms of service + privacy policy, crypto/legal check for your region (you)
-- [ ] Profanity filter / reporting for names before public launch
+- [ ] Profanity filter / reporting / mute for names and chat before public launch
 
 ## Your items
 

@@ -75,8 +75,12 @@ export class RemotePlayers {
     if (!r) return;
     r.connected = connected;
     r.tag.setStatus(connected ? null : 'reconnecting');
-    if (!connected) r.samples = [{ ts: 0, s: { ...r.shown, speed: 0, air: false } }];   // freeze in place
+    if (!connected) r.samples = [{ ts: 0, s: { ...r.shown, speed: 0, air: false, emote: 0 } }];   // freeze in place
   }
+
+  name(id: string): string | null { return this.players.get(id)?.name ?? null; }
+
+  say(id: string, text: string): void { this.players.get(id)?.tag.say(text); }
 
   rename(id: string, name: string): void {
     const r = this.players.get(id);
@@ -88,18 +92,19 @@ export class RemotePlayers {
     const est = ts - now;
     // keep the estimate from the fastest-arriving snapshots, but let it drift so clock skew can't stick
     this.clockOffset = this.clockOffset === null || est > this.clockOffset ? est : this.clockOffset - 0.05;
-    for (const [id, x, y, z, yaw, speed, air, walk] of entries) {
+    for (const [id, x, y, z, yaw, speed, air, walk, emote] of entries) {
       const r = this.players.get(id);
       if (!r || !r.connected) continue;
       // the untimed starting sample (from welcome/presence) gets a time just before the first real one
       if (r.samples.length === 1 && r.samples[0].ts === 0) r.samples[0].ts = ts - 70;
       if (r.samples.length && r.samples[r.samples.length - 1].ts >= ts) continue;
-      r.samples.push({ ts, s: { x, y, z, yaw, speed, air: air === 1, walk } });
+      r.samples.push({ ts, s: { x, y, z, yaw, speed, air: air === 1, walk, emote } });
       if (r.samples.length > 30) r.samples.splice(0, r.samples.length - 30);
     }
   }
 
   update(dt: number, t: number): void {
+    const now = performance.now();
     const renderTs = performance.now() + (this.clockOffset ?? 0) - INTERP_DELAY_MS;
     for (const r of this.players.values()) {
       const s = this.sample(r, renderTs);
@@ -113,8 +118,9 @@ export class RemotePlayers {
       r.wasAir = s.air;
       r.land = damp(r.land, 0, 9, dt);
       if (!s.air) r.phase += s.speed * dt * 8;
-      r.owl.animate(dt, t, { speed: s.speed, phase: r.phase, air: s.air, vy: r.vy, land: r.land });
-      r.tag.sprite.position.set(s.x, s.y + 1.22, s.z);
+      r.owl.animate(dt, t, { emote: s.emote, speed: s.speed, phase: r.phase, air: s.air, vy: r.vy, land: r.land });
+      r.tag.sprite.position.set(s.x, s.y + 1.0, s.z);
+      r.tag.tick(now);
     }
   }
 
@@ -136,7 +142,7 @@ export class RemotePlayers {
     return {
       x: lerp(a.s.x, b.s.x, k), y: lerp(a.s.y, b.s.y, kk), z: lerp(a.s.z, b.s.z, k),
       yaw: lerpAngle(a.s.yaw, b.s.yaw, kk), speed: lerp(a.s.speed, b.s.speed, kk),
-      air: kk < 0.5 ? a.s.air : b.s.air, walk: b.s.walk,
+      air: kk < 0.5 ? a.s.air : b.s.air, walk: b.s.walk, emote: b.s.emote,
     };
   }
 }

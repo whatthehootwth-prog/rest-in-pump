@@ -11,9 +11,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => {
 export interface HudActions {
   retry(): void;
   rename(name: string): boolean;
-  nextWalk(): void;
   setShadows(on: boolean): void;
-  setResolution(v: string): void;
 }
 
 /**
@@ -35,21 +33,13 @@ export class Hud {
     this.dialog.addEventListener('click', (e) => { if (e.target === this.dialog) this.dialog.close(); });
     $('net-retry').addEventListener('click', () => actions.retry());
     $('net-reload').addEventListener('click', () => location.reload());
-    $('walk-btn').addEventListener('click', () => actions.nextWalk());
     $('name-form').addEventListener('submit', (e) => { e.preventDefault(); this.submitName(); });
     $<HTMLInputElement>('name-input').addEventListener('input', () => this.validateNameField(false));
 
     const shadows = $<HTMLInputElement>('opt-shadows');
     shadows.checked = prefs.shadows();
     shadows.addEventListener('change', () => actions.setShadows(shadows.checked));
-    const res = $<HTMLSelectElement>('opt-res');
-    res.value = prefs.resolution();
-    res.addEventListener('change', () => actions.setResolution(res.value));
 
-    if (!prefs.seenControls()) {
-      $('controls-hint').hidden = false;
-      $('hint-close').addEventListener('click', () => this.dismissHint());
-    }
     this.setStatus(this.status);
   }
 
@@ -64,9 +54,14 @@ export class Hud {
     el.hidden = false;
   }
 
-  dismissHint() {
-    $('controls-hint').hidden = true;
-    prefs.setSeenControls();
+  /** Brief message near the bottom of the screen. */
+  private toastTimer: number | null = null;
+  toast(text: string) {
+    const el = $('toast');
+    el.textContent = text;
+    el.hidden = false;
+    if (this.toastTimer !== null) clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => { el.hidden = true; }, 2500);
   }
 
   // ------------------------------------------------------------------ connection
@@ -134,7 +129,6 @@ export class Hud {
     if (document.activeElement !== input) input.value = name;
   }
 
-  setWalk(name: string) { $('walk-name').textContent = name; }
 
   // ------------------------------------------------------------------ settings: name
   private validateNameField(showError: boolean): string | null {

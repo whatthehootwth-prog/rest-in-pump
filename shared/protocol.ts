@@ -7,7 +7,7 @@
  * to reload instead of misbehaving.
  */
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** Players are kept inside this circle around the world origin (metres). */
 export const WORLD_RADIUS = 33;
@@ -15,8 +15,12 @@ export const WORLD_RADIUS = 33;
 export const MAX_SPEED = 3.6;
 /** Highest a hop can reach (m). */
 export const MAX_HOP_HEIGHT = 2;
-/** Number of walk styles the owl has (indices 0 .. WALK_STYLE_COUNT-1). */
-export const WALK_STYLE_COUNT = 10;
+/** Number of walk styles. Each player is given one at random when they join and keeps it. */
+export const WALK_STYLE_COUNT = 9;
+/** Emotes: 0 = none, 1 dance, 2 club, 3 pray, 4 cry, 5 roll. */
+export const EMOTE_COUNT = 5;
+/** Chat message length limit (characters, after trimming). */
+export const CHAT_MAX = 140;
 /** How often clients send their own state, and how often the server broadcasts room snapshots. */
 export const STATE_SEND_HZ = 15;
 export const NAME_MIN = 2;
@@ -38,8 +42,10 @@ export interface PlayerState {
   speed: number;
   /** True while hopping. */
   air: boolean;
-  /** Walk style index. */
+  /** Walk style index (assigned by the server, fixed for the session). */
   walk: number;
+  /** Current emote, 0 = none. */
+  emote: number;
 }
 
 export interface PlayerInfo {
@@ -65,7 +71,9 @@ export type ErrorCode =
   | 'server_full'
   | 'unknown_room'
   | 'bad_name'
-  | 'rate_limited';
+  | 'rate_limited'
+  | 'bad_chat'
+  | 'chat_too_fast';
 
 // ------------------------------------------------------------------ client -> server
 
@@ -75,12 +83,13 @@ export type ClientMessage =
   | { t: 'rename'; name: string }
   | { t: 'join_room'; room: string }
   | { t: 'list_rooms' }
+  | { t: 'chat'; text: string }
   | { t: 'ping'; n: number };
 
 // ------------------------------------------------------------------ server -> client
 
-/** Compact per-player entry in a snapshot: id, x, y, z, yaw, speed, air (0/1), walk. */
-export type SnapshotEntry = [string, number, number, number, number, number, 0 | 1, number];
+/** Compact per-player entry in a snapshot: id, x, y, z, yaw, speed, air (0/1), walk, emote. */
+export type SnapshotEntry = [string, number, number, number, number, number, 0 | 1, number, number];
 
 export type ServerMessage =
   | {
@@ -99,6 +108,7 @@ export type ServerMessage =
   | { t: 'snapshot'; ts: number; s: SnapshotEntry[] }
   | { t: 'online'; total: number; room: number }
   | { t: 'rooms'; rooms: RoomSummary[] }
+  | { t: 'chat'; id: string; name: string; text: string; ts: number }
   | { t: 'error'; code: ErrorCode; message: string; fatal: boolean }
   | { t: 'pong'; n: number };
 
@@ -121,6 +131,14 @@ export function sanitizeName(raw: unknown): string | null {
   return name;
 }
 
+/** Cleans a chat message: no control/zero-width characters, collapsed whitespace, 1..CHAT_MAX chars. */
+export function sanitizeChat(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.length > CHAT_MAX * 4) return null;
+  const text = raw.normalize('NFKC').replace(/[\p{Cc}\p{Cf}]/gu, '').replace(/\s+/g, ' ').trim();
+  if (text.length < 1 || [...text].length > CHAT_MAX) return null;
+  return text;
+}
+
 export function isRoomId(v: unknown): v is string {
   return typeof v === 'string' && ROOM_ID_PATTERN.test(v);
 }
@@ -133,11 +151,12 @@ export function roomNumber(id: string): number {
 /** Validates a player state sent by a client. Values are range-checked later by the server. */
 export function parseState(v: unknown): PlayerState | null {
   if (!isObject(v)) return null;
-  const { x, y, z, yaw, speed, air, walk } = v;
+  const { x, y, z, yaw, speed, air, walk, emote } = v;
   if (![x, y, z, yaw, speed].every(isFiniteNumber)) return null;
   if (typeof air !== 'boolean') return null;
   if (!Number.isInteger(walk) || (walk as number) < 0 || (walk as number) >= WALK_STYLE_COUNT) return null;
-  return { x: x as number, y: y as number, z: z as number, yaw: yaw as number, speed: speed as number, air, walk: walk as number };
+  if (!Number.isInteger(emote) || (emote as number) < 0 || (emote as number) > EMOTE_COUNT) return null;
+  return { x: x as number, y: y as number, z: z as number, yaw: yaw as number, speed: speed as number, air, walk: walk as number, emote: emote as number };
 }
 
 /** Parses and validates one raw client message. Returns null for anything malformed. */
@@ -169,6 +188,8 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return typeof v.room === 'string' && v.room.length <= 32 ? { t: 'join_room', room: v.room } : null;
     case 'list_rooms':
       return { t: 'list_rooms' };
+    case 'chat':
+      return typeof v.text === 'string' && v.text.length <= CHAT_MAX * 4 ? { t: 'chat', text: v.text } : null;
     case 'ping':
       return isFiniteNumber(v.n) ? { t: 'ping', n: v.n } : null;
     default:

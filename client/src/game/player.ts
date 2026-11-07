@@ -16,6 +16,8 @@ export class LocalPlayer {
   readonly pos = new THREE.Vector3(0, 0, 12);
   yaw = 0;
   speed = 0;
+  /** Current emote (0 = none). Walking or hopping cancels it. */
+  emote = 0;
   private readonly dir = new THREE.Vector3(0, 0, 1);
   private y = 0;
   private vy = 0;
@@ -36,6 +38,9 @@ export class LocalPlayer {
     this.yaw = s.yaw;
   }
 
+  /** Starts an emote, or stops it if it is already playing. */
+  toggleEmote(i: number): void { this.emote = this.emote === i ? 0 : i; }
+
   update(dt: number, t: number, input: Input, cameraYaw: number, colliders: Colliders): void {
     this.fwd.set(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw));
     this.rgt.set(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw));
@@ -52,7 +57,8 @@ export class LocalPlayer {
     this.pos.addScaledVector(this.dir, this.speed * dt);
     resolveCollisions(this.pos, RADIUS, colliders);
 
-    if (input.down('Space') && this.grounded) { this.vy = HOP_VELOCITY; this.grounded = false; }
+    if (moving) this.emote = 0;
+    if (input.down('Space') && this.grounded) { this.vy = HOP_VELOCITY; this.grounded = false; this.emote = 0; }
     if (!this.grounded) {
       this.vy -= GRAVITY * dt; this.y += this.vy * dt;
       if (this.y <= 0) { this.y = 0; this.vy = 0; this.grounded = true; this.land = 1; }
@@ -62,7 +68,7 @@ export class LocalPlayer {
     this.owl.root.position.set(this.pos.x, this.y, this.pos.z);
     this.owl.root.rotation.y = this.yaw;
     if (this.grounded) this.phase += this.speed * dt * 8;
-    this.owl.animate(dt, t, { speed: this.speed, phase: this.phase, air: !this.grounded, vy: this.vy, land: this.land });
+    this.owl.animate(dt, t, { emote: this.emote, speed: this.speed, phase: this.phase, air: !this.grounded, vy: this.vy, land: this.land });
   }
 
   get height(): number { return this.y; }
@@ -70,7 +76,7 @@ export class LocalPlayer {
   state(): PlayerState {
     return {
       x: this.pos.x, y: clamp(this.y, 0, 2), z: this.pos.z, yaw: this.yaw,
-      speed: this.speed < 0.02 ? 0 : this.speed, air: !this.grounded, walk: this.owl.walk,
+      speed: this.speed < 0.02 ? 0 : this.speed, air: !this.grounded, walk: this.owl.walk, emote: this.emote,
     };
   }
 }
