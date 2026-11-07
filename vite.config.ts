@@ -3,7 +3,8 @@ import { defineConfig } from 'vitest/config';
 // The client lives in /client. In development Vite serves it on :5173 and forwards the
 // WebSocket endpoint to the game server (npm run dev:server, default :8787).
 // In production the game server serves the built files from dist/client itself.
-const serverPort = Number(process.env.PORT ?? 8787);
+// GAME_SERVER_PORT (not PORT: tools that launch Vite often set PORT to Vite's own port)
+const serverPort = Number(process.env.GAME_SERVER_PORT ?? 8787);
 
 export default defineConfig({
   root: 'client',
@@ -19,6 +20,7 @@ export default defineConfig({
     proxy: {
       '/ws': { target: `ws://127.0.0.1:${serverPort}`, ws: true },
       '/healthz': { target: `http://127.0.0.1:${serverPort}` },
+      '/api': { target: `http://127.0.0.1:${serverPort}` },
     },
   },
   test: {

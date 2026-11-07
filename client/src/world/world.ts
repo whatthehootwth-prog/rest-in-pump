@@ -3,10 +3,11 @@ import { Rng, fbm2, lerp, noise2, smooth } from '../util/math.ts';
 import { canvasTex, textTex } from '../util/textures.ts';
 import { merge } from '../owl/toon.ts';
 import type { Colliders } from './collision.ts';
+import { PLOTS, PLOT_SIZE } from '../../../shared/graves.ts';
 
 /*
  * The graveyard. Built from a fixed seed so every player's world (and every collider) is identical.
- * The gravestones here are scenery only — they are not player-created graves.
+ * Players' graves live on the 40 plots (see shared/graves.ts and world/graves.ts); this file only builds scenery.
  */
 
 export interface World {
@@ -18,6 +19,8 @@ export interface World {
   setShadows(on: boolean): void;
   /** Grass bends away from these points (players). Up to 8. */
   setGrassPushers(points: THREE.Vector3[]): void;
+  /** Shared scenery materials, reused by the grave builder. */
+  materials: { stone: THREE.MeshStandardMaterial[]; iron: THREE.MeshStandardMaterial; stoneTex: THREE.Texture };
 }
 
 const HALF = 18;          // fence half-size
@@ -169,6 +172,7 @@ gl_Position = projectionMatrix * mvPosition;`);
     while (i < COUNT && guard++ < COUNT * 4) {
       const x = rr(-30, 30), z = rr(-30, 32);
       if (onPath(x, z) || (Math.abs(x) < 3.4 && z < -11.8 && z > -17.2) || Math.hypot(x, z) > 32) continue;
+      if (PLOTS.some((p) => Math.abs(x - p.x) < PLOT_SIZE.w / 2 + 0.05 && Math.abs(z - p.z) < PLOT_SIZE.d / 2 + 0.05)) continue;
       if (fbm2(x * 0.2, z * 0.2) < 0.32 && rng.next() < 0.7) continue;
       dm.position.set(x, groundHeight(x, z), z); dm.rotation.set(rr(-0.15, 0.15), rr(0, Math.PI), rr(-0.25, 0.25));
       dm.scale.setScalar(rr(0.55, 1.35)); dm.updateMatrix(); mesh.setMatrixAt(i, dm.matrix);
@@ -183,42 +187,7 @@ gl_Position = projectionMatrix * mvPosition;`);
   const pick = <T,>(arr: T[]) => arr[(rng.next() * arr.length) | 0];
   const ironMat = new THREE.MeshStandardMaterial({ color: 0x1b1a22, roughness: 0.55, metalness: 0.7 });
   const barkMat = new THREE.MeshStandardMaterial({ color: 0x2e2630, roughness: 1 });
-  const engraved = [textTex(['R.I.P.']), textTex(['REST', 'IN PEACE']), textTex(['HERE LIES', 'A GOOD OWL'])];
 
-  // ------------------------------------------------------------------ scenery gravestones
-  const archGeo = (w: number, h: number, d: number) => {
-    const s = new THREE.Shape(); s.moveTo(-w / 2, 0); s.lineTo(w / 2, 0); s.lineTo(w / 2, h - w / 2);
-    s.absarc(0, h - w / 2, w / 2, 0, Math.PI, false); s.lineTo(-w / 2, 0);
-    const g = new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.025, bevelSegments: 2, curveSegments: 20 });
-    g.translate(0, 0, -d / 2); return g;
-  };
-  const gravestone = (type: string) => {
-    const g = new THREE.Group(), mat = pick(stoneMats);
-    let geo: THREE.BufferGeometry, plate: [number, number, number] | null = null;
-    if (type === 'arch') { const w = rr(0.5, 0.7), h = rr(0.75, 1.05); geo = archGeo(w, h, 0.13); plate = [w * 0.7, h * 0.55, 0.09]; }
-    else if (type === 'slab') {
-      const w = rr(0.55, 0.75), h = rr(0.6, 0.85); const top = new THREE.BoxGeometry(w, h, 0.16); top.translate(0, h / 2, 0);
-      const cap = new THREE.BoxGeometry(w + 0.08, 0.07, 0.22); cap.translate(0, h, 0);
-      geo = merge([top, cap]); plate = [w * 0.75, h * 0.55, 0.085];
-    } else if (type === 'cross') {
-      const a = new THREE.BoxGeometry(0.13, 1.2, 0.12); a.translate(0, 0.6, 0);
-      const b = new THREE.BoxGeometry(0.62, 0.13, 0.12); b.translate(0, 0.86, 0);
-      const base = new THREE.BoxGeometry(0.36, 0.16, 0.3); base.translate(0, 0.08, 0);
-      geo = merge([a, b, base]);
-    } else {
-      const base = new THREE.BoxGeometry(0.5, 0.22, 0.5); base.translate(0, 0.11, 0);
-      const shaft = new THREE.CylinderGeometry(0.12, 0.19, 1.45, 4, 1); shaft.rotateY(Math.PI / 4); shaft.translate(0, 0.22 + 0.725, 0);
-      const tip = new THREE.ConeGeometry(0.17, 0.26, 4); tip.rotateY(Math.PI / 4); tip.translate(0, 0.22 + 1.45 + 0.13, 0);
-      geo = merge([base, shaft, tip]);
-    }
-    const m = new THREE.Mesh(geo, mat); m.castShadow = m.receiveShadow = true; g.add(m);
-    if (plate && rng.next() < 0.8) {
-      const p = new THREE.Mesh(new THREE.PlaneGeometry(plate[0], plate[0] * 0.5),
-        new THREE.MeshStandardMaterial({ map: pick(engraved), transparent: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 }));
-      p.position.set(0, plate[1], plate[2]); g.add(p);
-    }
-    return g;
-  };
   const candles: THREE.Mesh[] = [];
   const candleMat = new THREE.MeshStandardMaterial({ color: 0xe8e0cc, roughness: 0.8 });
   const flameMat = new THREE.MeshBasicMaterial({ color: 0xffc46b, toneMapped: false });
@@ -227,27 +196,8 @@ gl_Position = projectionMatrix * mvPosition;`);
     const f = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8), flameMat); f.scale.y = 1.7; f.position.set(x, y + 0.2, z);
     scene.add(c, f); candles.push(f);
   };
-  const TREE_SPOTS: [number, number][] = [[-9, -5], [10.5, 1.5], [-13, 9], [13, -9.5], [7, 12.5], [-5.5, -10.5]];
-  for (let z = -9; z <= 15; z += 3.1) {
-    for (let x = -15.6; x <= 15.6; x += 2.25) {
-      if (Math.abs(x) < 2.6 || rng.next() < 0.22) continue;
-      const gx = x + rr(-0.35, 0.35), gz = z + rr(-0.3, 0.3);
-      if (TREE_SPOTS.some(([tx, tz]) => Math.hypot(tx - gx, tz - gz) < 1.9)) continue;
-      if (Math.hypot(gx, gz - 12) < 3) continue;
-      const r = rng.next(), type = r < 0.45 ? 'arch' : r < 0.7 ? 'slab' : r < 0.9 ? 'cross' : 'obelisk';
-      const s = gravestone(type);
-      s.position.set(gx, -rr(0, 0.06), gz);
-      s.rotation.set(rr(-0.07, 0.07), rr(-0.18, 0.18), rr(-0.08, 0.08));
-      scene.add(s);
-      colliders.circles.push({ x: gx, z: gz, r: type === 'obelisk' ? 0.42 : 0.4 });
-      if (rng.next() < 0.45) {
-        const ledger = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, 1.3), pick(stoneMats));
-        ledger.position.set(gx, 0.04, gz + 0.85); ledger.rotation.y = s.rotation.y;
-        ledger.castShadow = ledger.receiveShadow = true; scene.add(ledger);
-      }
-      if (rng.next() < 0.12) addCandle(gx + rr(-0.25, 0.25), 0, gz + 0.32);
-    }
-  }
+  // trees stand clear of the grave plots
+  const TREE_SPOTS: [number, number][] = [[-16.6, -10.5], [16.6, -6], [-16.6, 2], [16.6, 10], [-6, 15.5], [6.5, -11]];
 
   // ------------------------------------------------------------------ dead trees
   const UP = new THREE.Vector3(0, 1, 0);
@@ -381,6 +331,7 @@ gl_Position = projectionMatrix * mvPosition;`);
 
   return {
     scene, colliders, groundHeight,
+    materials: { stone: stoneMats, iron: ironMat, stoneTex },
     update(t, camera, focus) {
       time.value = t;
       sky.position.copy(camera.position);

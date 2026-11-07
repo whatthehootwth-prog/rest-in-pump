@@ -18,6 +18,17 @@ export interface Config {
   snapshotHz: number;
   /** Trust X-Forwarded-For (only when running behind your own reverse proxy). */
   trustProxy: boolean;
+  /** SQLite file for graves and payments. */
+  dbPath: string;
+  nearRpcUrls: string[];
+  /** NEP-141 token used for payments, and the account that receives them. */
+  wthContract: string;
+  wthDecimals: number;
+  treasury: string;
+  /** Whole-WTH price per grave tier, comma separated (tier 1..4). */
+  gravePricesWth: string;
+  /** How long a plot + meme stay reserved while the player pays. */
+  holdMinutes: number;
 }
 
 function int(env: NodeJS.ProcessEnv, key: string, def: number, min: number, max: number): number {
@@ -50,5 +61,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     logLevel: level,
     snapshotHz: int(env, 'SNAPSHOT_HZ', 15, 1, 60),
     trustProxy: env.TRUST_PROXY === '1',
+    dbPath: env.DB_PATH ?? 'data/rip.sqlite',
+    nearRpcUrls: (env.NEAR_RPC_URLS ?? 'https://rpc.mainnet.fastnear.com,https://free.rpc.fastnear.com,https://rpc.mainnet.near.org').split(',').map((s) => s.trim()).filter(Boolean),
+    wthContract: env.WTH_CONTRACT ?? 'wth-0b2227.launchpad.justhoot.near',
+    wthDecimals: int(env, 'WTH_DECIMALS', 18, 0, 40),
+    treasury: env.TREASURY_ACCOUNT ?? 'whatthehoot.near',
+    gravePricesWth: env.GRAVE_PRICES_WTH ?? '75000,370000,740000,3700000',
+    holdMinutes: int(env, 'HOLD_MINUTES', 15, 1, 120),
   };
 }

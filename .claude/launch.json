@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["server/src/index.ts"],
       "port": 8787
+    },
+    {
+      "name": "client-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite"],
+      "port": 5173
     }
   ]
 }

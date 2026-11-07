@@ -6,6 +6,10 @@ import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import type { Config } from './config.ts';
 import type { Logger } from './log.ts';
 import { RoomManager, type Player } from './rooms.ts';
+import { openDb, type Db } from './db.ts';
+import { GraveService, parseTierPrices } from './graves.ts';
+import { createApi } from './api.ts';
+import { createNearRpc, fetchFtMetadata, toUnits, verifyFtTransfer, viewFunction, type MetadataResult, type TransferCheck, type TransferResult } from './near.ts';
 import {
   MAX_CLIENT_MESSAGE_BYTES, PROTOCOL_VERSION, parseClientMessage, sanitizeChat, sanitizeName,
   type ClientMessage, type ErrorCode, type ServerMessage, type SnapshotEntry,
@@ -27,7 +31,14 @@ interface Client {
 export interface GameServer {
   port: number;
   rooms: RoomManager;
+  graves: GraveService;
   close(): Promise<void>;
+}
+
+/** Test seams: replace the NEAR calls (everything else is real). */
+export interface ServerOptions {
+  near?: { lookup(contract: string): Promise<MetadataResult>; verify(c: TransferCheck): Promise<TransferResult> };
+  db?: Db;
 }
 
 // Rate limit: a steady 40 messages/s with bursts of 60 (state updates are sent at 15/s).
@@ -50,8 +61,29 @@ const ERROR_TEXT: Record<ErrorCode, string> = {
   chat_too_fast: 'You are chatting too fast. Wait a moment.',
 };
 
-export async function startServer(cfg: Config, log: Logger): Promise<GameServer> {
+export async function startServer(cfg: Config, log: Logger, opts: ServerOptions = {}): Promise<GameServer> {
   const rooms = new RoomManager({ capacity: cfg.roomCapacity, maxRooms: cfg.maxRooms, graceMs: cfg.reconnectGraceMs });
+  const db = opts.db ?? openDb(cfg.dbPath);
+  const rpc = createNearRpc(cfg.nearRpcUrls);
+  const prices = parseTierPrices(cfg.gravePricesWth, cfg.wthDecimals, toUnits);
+  const broadcastAll = (msg: ServerMessage) => {
+    const data = JSON.stringify(msg);
+    for (const c of clients) if (c.playerId && c.ws.readyState === WebSocket.OPEN) c.ws.send(data);
+  };
+  const graves = new GraveService({
+    db, log: log.child({ mod: 'graves' }), token: cfg.wthContract, receiver: cfg.treasury, decimals: cfg.wthDecimals,
+    tierUnits: prices.units, tierWhole: prices.whole, holdMinutes: cfg.holdMinutes,
+    lookupNear: opts.near?.lookup ?? ((contract) => fetchFtMetadata(rpc, contract)),
+    verify: opts.near?.verify ?? ((check) => verifyFtTransfer(rpc, check)),
+    onGraveAdded: (grave) => broadcastAll({ t: 'grave_added', grave }),
+    onReservedChanged: (reserved) => broadcastAll({ t: 'plots_reserved', reserved }),
+  });
+  const clientIp = (req: http.IncomingMessage) =>
+    (cfg.trustProxy ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0]?.trim() : '') || req.socket.remoteAddress || '?';
+  const api = createApi(graves, log.child({ mod: 'api' }), clientIp, async (account) => {
+    const r = await viewFunction(rpc, cfg.wthContract, 'ft_balance_of', { account_id: account });
+    return 'value' in r && typeof r.value === 'string' ? r.value : null;
+  });
   const clients = new Set<Client>();
   const byPlayer = new Map<string, Client>();
   const dirtyRooms = new Set<string>();
@@ -189,8 +221,9 @@ export async function startServer(cfg: Config, log: Logger): Promise<GameServer>
   };
 
   // ------------------------------------------------------------------ http + websocket
-  const httpServer = http.createServer((req, res) => {
+  const httpServer = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
+    if (await api(req, res, url)) return;
     if (url.pathname === '/healthz') {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       res.end(JSON.stringify({
@@ -262,6 +295,15 @@ export async function startServer(cfg: Config, log: Logger): Promise<GameServer>
     }
   }, Math.min(1000, Math.max(50, cfg.reconnectGraceMs / 4)));
 
+  // payments: expire unpaid holds, re-check interrupted verifications
+  let sweeping = false;
+  const paymentSweep = setInterval(() => {
+    if (sweeping) return;
+    sweeping = true;
+    graves.sweep(Date.now()).catch((err) => log.error('payment sweep failed', { err })).finally(() => { sweeping = false; });
+  }, 15000);
+  void graves.sweep(Date.now()).catch((err) => log.error('payment sweep failed', { err }));
+
   const heartbeat = setInterval(() => {
     for (const c of clients) {
       if (!c.alive) { c.ws.terminate(); continue; }
@@ -281,11 +323,12 @@ export async function startServer(cfg: Config, log: Logger): Promise<GameServer>
   return {
     port,
     rooms,
+    graves,
     close: () => new Promise<void>((resolve) => {
-      clearInterval(tick); clearInterval(sweeper); clearInterval(heartbeat);
+      clearInterval(tick); clearInterval(sweeper); clearInterval(heartbeat); clearInterval(paymentSweep);
       for (const c of clients) c.ws.close(1001, 'server shutting down');
       wss.close();
-      httpServer.close(() => resolve());
+      httpServer.close(() => { if (!opts.db) db.close(); resolve(); });
       setTimeout(() => { for (const c of clients) c.ws.terminate(); }, 2000).unref();
     }),
   };
@@ -316,7 +359,7 @@ const SECURITY_HEADERS = {
   'referrer-policy': 'strict-origin-when-cross-origin',
   'x-frame-options': 'DENY',
   'content-security-policy':
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: https:; frame-src https:; frame-ancestors 'none'; base-uri 'self'",
 };
 
 function serveStatic(root: string, pathname: string, res: http.ServerResponse) {

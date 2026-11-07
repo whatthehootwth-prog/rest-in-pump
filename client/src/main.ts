@@ -13,6 +13,12 @@ import { Hud } from './ui/hud.ts';
 import { ChatPanel } from './ui/chat.ts';
 import { NameTag } from './ui/nametag.ts';
 import { Landing } from './ui/landing.ts';
+import { GraveField, type PlotFocus } from './world/graves.ts';
+import { PlotCard } from './ui/plotcard.ts';
+import { BuryDialog } from './ui/bury.ts';
+import { Wallet } from './wallet/wallet.ts';
+import { api } from './net/api.ts';
+import { shortAccount } from './ui/dom.ts';
 import { prefs, sessionState } from './util/storage.ts';
 
 /** Yields so the loading text can paint. Background tabs get no animation frames, so don't wait for one there. */
@@ -62,6 +68,37 @@ async function main() {
   selfTag.sprite.visible = false;
   world.scene.add(selfTag.sprite);
   const cam = new CameraRig(canvas);
+
+  // ---- graves (loaded from the server; visible behind the intro too)
+  const graves = new GraveField(world.scene, world.colliders, world.materials.stone, world.materials.iron);
+  const loadGraves = () => api.graves().then((g) => { graves.setGraves(g.graves); graves.setReserved(g.reserved); }).catch((e) => console.warn('graves', e));
+  void loadGraves();
+
+  // ---- wallet (top right) + burying
+  const wallet = new Wallet();
+  const walletBtn = document.getElementById('wallet-btn') as HTMLButtonElement;
+  const walletMenu = document.getElementById('wallet-menu') as HTMLElement;
+  const showWallet = (a: string | null) => {
+    document.getElementById('wallet-label')!.textContent = a ? shortAccount(a) : 'Connect wallet';
+    document.getElementById('wallet-account')!.textContent = a ?? '';
+    if (!a) { walletMenu.hidden = true; walletBtn.setAttribute('aria-expanded', 'false'); }
+  };
+  wallet.onChange(showWallet);
+  walletBtn.addEventListener('click', async () => {
+    if (!wallet.account) {
+      walletBtn.disabled = true;
+      try { await wallet.connect(); } catch (e) { console.error('wallet connect failed', e); hud.toast('Could not open the wallet. Try again.'); } finally { walletBtn.disabled = false; }
+      return;
+    }
+    walletMenu.hidden = !walletMenu.hidden;
+    walletBtn.setAttribute('aria-expanded', String(!walletMenu.hidden));
+  });
+  document.getElementById('wallet-disconnect')!.addEventListener('click', () => void wallet.disconnect());
+  document.addEventListener('click', (e) => { if (!walletMenu.hidden && !(e.target as HTMLElement).closest('.wallet-wrap')) walletMenu.hidden = true; });
+  void wallet.restore();
+  const bury = new BuryDialog(wallet, (t) => hud.toast(t));
+  const plotCard = new PlotCard((plot) => void bury.open(plot));
+  let focus: PlotFocus | null = null;
   const remotes = new RemotePlayers(world.scene);
   input.bindTouchButtons(document);
 
@@ -92,6 +129,7 @@ async function main() {
   document.getElementById('snap-btn')!.addEventListener('click', (e) => { snapshot(); (e.currentTarget as HTMLElement).blur(); });
   input.onPress('KeyP', snapshot);
   input.onPress('Enter', () => chat.focus());
+  input.onPress('KeyE', () => plotCard.press(focus));
 
   // ---- multiplayer
   let selfId: string | null = null;
@@ -102,6 +140,7 @@ async function main() {
   c.onStatus((s) => {
     hud.setStatus(s);
     chat.setConnected(s.kind === 'connected');
+    plotCard.canBury = s.kind === 'connected';
     if (s.kind === 'outdated' || s.kind === 'refused') remotes.clear();
   });
   c.onMessage((m: ServerMessage) => {
@@ -124,7 +163,7 @@ async function main() {
         if (!joinedOnce) {
           chat.system(`You joined as ${myName}. ${others === 0 ? 'Nobody else is here yet.' : `${others} other ${others === 1 ? 'owl is' : 'owls are'} here.`}`);
           chat.system('Arrow keys walk · Shift run · Space hop · 1–5 emotes · P snapshot · Enter chat');
-        } else chat.system('Reconnected.');
+        } else { chat.system('Reconnected.'); void loadGraves(); }
         joinedOnce = true;
         lastSent = null;
         break;
@@ -153,6 +192,11 @@ async function main() {
         if (m.id === selfId) { selfTag.say(m.text); chat.message(m.name, m.text, true); }
         else { remotes.say(m.id, m.text); chat.message(m.name, m.text, false); }
         break;
+      case 'grave_added':
+        graves.addGrave(m.grave);
+        chat.system(`${m.grave.meme.symbol} was laid to rest in grave #${m.grave.plot} by ${shortAccount(m.grave.creator)}.`);
+        break;
+      case 'plots_reserved': graves.setReserved(m.reserved); break;
       case 'snapshot': remotes.applySnapshot(m.ts, m.s); break;
       case 'online': hud.setOnline(m.total); break;
       case 'rooms': break;
@@ -185,6 +229,11 @@ async function main() {
     cam.follow();
     canvas.focus();
     c.start();
+    // finish a grave payment interrupted by a refresh or a wallet redirect
+    const q = new URLSearchParams(location.search);
+    const hash = q.get('transactionHashes')?.split(',').pop() ?? null;
+    if (q.has('transactionHashes') || q.has('errorCode') || q.has('account_id')) history.replaceState(null, '', location.pathname);
+    void bury.recover(hash ? { hash, account: q.get('account_id') } : null);
   };
   const landing = new Landing(enterWorld);
   // a refresh while already in the world (session still alive) goes straight back in
@@ -202,6 +251,9 @@ async function main() {
     selfTag.sprite.position.set(player.pos.x, player.height + 1.0, player.pos.z);
     selfTag.tick(now);
     remotes.update(dt, t);
+    focus = entered ? graves.focusAt(player.pos) : null;
+    graves.update(t, focus);
+    plotCard.show(focus);
     if (entered) cam.update(dt, input, player.pos, player.height, world.groundHeight);
     else cam.cinematic(t, world.groundHeight);
     pushers.length = 0; pushers.push(player.pos); remotes.positions(pushers);
@@ -216,7 +268,7 @@ async function main() {
   hud.setLoading(null);
   if (resuming) { landing.skip(); enterWorld(); } else landing.show();
 
-  if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__rip = { player, remotes, conn: c, owl };
+  if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__rip = { player, remotes, conn: c, owl, graves, cam };
 }
 
 main().catch((err) => {

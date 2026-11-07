@@ -234,3 +234,78 @@ body.landing-open #net-banner { display: none !important; }
   .landing-actions { flex-direction: column; width: 100%; }
   .landing-actions .btn { width: 100%; }
 }
+
+/* ---------------------------------------------------------------- wallet */
+.wallet-wrap { position: relative; }
+.menu {
+  position: absolute; right: 0; top: 42px; z-index: 9; min-width: 220px; padding: 12px;
+  background: var(--panel-solid); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.menu p { margin: 0 0 6px; overflow-wrap: anywhere; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+body.landing-open .wallet-wrap { display: none; }
+
+/* ---------------------------------------------------------------- plot card (walk up to a grave) */
+.plot-card {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; z-index: 3; width: min(360px, calc(100vw - 32px));
+  padding: 12px 14px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px;
+}
+body.landing-open .plot-card { display: none !important; }
+.pc-title { font-weight: 700; font-size: 15px; }
+.pc-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.pc-text { margin: 4px 0 10px; color: #d9d6cf; font-size: 13px; }
+.pc-note { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.pc-note b { color: var(--text); font-weight: 600; }
+.pc-meme { display: flex; gap: 10px; align-items: center; }
+.pc-icon { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex: none; background: #fff; }
+.pc-icon-ph { display: grid; place-items: center; background: #3b3846; color: var(--text); font-weight: 800; }
+.pc-msg { margin: 10px 0 0; padding: 8px 10px; border-left: 2px solid var(--focus); background: #1d1c23; font-size: 13px; font-style: italic; overflow-wrap: anywhere; }
+.pc-contract { margin: 6px 0 0; font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+@media (max-width: 1000px) { .plot-card { bottom: 16px; left: auto; right: 16px; transform: none; } }
+
+/* ---------------------------------------------------------------- bury dialog */
+#bury { width: min(520px, calc(100vw - 24px)); }
+.bury-body { padding: 14px 16px 16px; }
+.steps { display: flex; gap: 6px; list-style: none; margin: 0 0 14px; padding: 0; font-size: 12px; color: var(--muted); }
+.steps li { flex: 1; padding-top: 6px; border-top: 2px solid var(--line); }
+.steps li.on { color: var(--text); border-color: var(--focus); }
+.steps li.done { border-color: #6b5a2a; }
+.bury-step .lbl { display: block; margin: 0 0 6px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.bury-step .lbl:not(:first-child) { margin-top: 14px; }
+.bury-step select { flex: none; }
+.bury-step textarea {
+  width: 100%; padding: 8px 10px; resize: vertical; color: var(--text); font: inherit; font-size: 14px;
+  background: #0f0e13; border: 1px solid var(--line); border-radius: 6px;
+}
+.bury-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.meme-chip { display: flex; gap: 10px; align-items: center; margin: 10px 0 2px; padding: 8px 10px; background: #1d1c23; border-radius: 8px; }
+.meme-chip img, .meme-ph { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: none; background: #fff; }
+.meme-ph { display: grid; place-items: center; background: #3b3846; font-weight: 800; }
+.meme-chip span { color: var(--muted); }
+.tiers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tier {
+  display: grid; justify-items: center; gap: 3px; padding: 10px 6px; cursor: pointer; text-align: center;
+  background: #1a1920; border: 1px solid var(--line); border-radius: 8px; color: var(--text); font-size: 12px;
+}
+.tier[aria-checked="true"] { border-color: var(--focus); background: #24221a; }
+.tier b { font-size: 12px; line-height: 1.2; }
+.tier-usd { color: var(--focus); font-weight: 700; }
+.tier-wth { color: var(--muted); font-size: 11px; }
+.tier-art { width: 34px; height: 40px; margin-bottom: 4px; background: #8d8a92; }
+.tier-art-1 { width: 8px; background: #6b4a2e; box-shadow: 0 -10px 0 -3px transparent; position: relative; }
+.tier-art-1::after { content: ''; position: absolute; left: -11px; top: 10px; width: 30px; height: 7px; background: #6b4a2e; }
+.tier-art-2 { border-radius: 17px 17px 3px 3px; }
+.tier-art-3 { width: 38px; height: 44px; border-radius: 19px 19px 3px 3px; background: #2c2933; box-shadow: inset 0 0 0 3px #d9a743; }
+.tier-art-4 { width: 42px; height: 42px; background: linear-gradient(#a7a19a 0 22%, transparent 22% 30%, #a7a19a 30%); clip-path: polygon(50% 0, 100% 22%, 100% 100%, 0 100%, 0 22%); }
+@media (max-width: 480px) { .tiers { grid-template-columns: repeat(2, 1fr); } }
+.summary { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 13px; }
+.summary dt { color: var(--muted); }
+.summary dd { margin: 0; overflow-wrap: anywhere; }
+.status { margin: 12px 0 0; padding: 10px 12px; border-radius: 8px; background: #1d1c23; font-size: 13px; }
+.status.bad { background: #2a1918; color: #f0b3ab; }
+.status.ok { background: #172417; color: #b7e3bf; font-size: 15px; }
+.status.busy { display: flex; align-items: center; gap: 10px; }
+.spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #4a4855; border-top-color: var(--focus); animation: spin 0.8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+#bury a { color: var(--focus); }

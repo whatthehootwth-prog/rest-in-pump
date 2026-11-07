@@ -7,6 +7,8 @@
  * to reload instead of misbehaving.
  */
 
+import type { GraveInfo } from './graves.ts';
+
 export const PROTOCOL_VERSION = 2;
 
 /** Players are kept inside this circle around the world origin (metres). */
@@ -109,6 +111,8 @@ export type ServerMessage =
   | { t: 'online'; total: number; room: number }
   | { t: 'rooms'; rooms: RoomSummary[] }
   | { t: 'chat'; id: string; name: string; text: string; ts: number }
+  | { t: 'grave_added'; grave: GraveInfo }
+  | { t: 'plots_reserved'; reserved: number[] }
   | { t: 'error'; code: ErrorCode; message: string; fatal: boolean }
   | { t: 'pong'; n: number };
 

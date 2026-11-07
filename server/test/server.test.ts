@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { startServer, type GameServer } from '../src/server.ts';
+import { startServer, type GameServer, type ServerOptions } from '../src/server.ts';
 import { loadConfig } from '../src/config.ts';
 import { silentLogger } from '../src/log.ts';
 import { PROTOCOL_VERSION, type ServerMessage } from '../../shared/protocol.ts';
@@ -47,9 +47,9 @@ class TestClient {
 
 let server: GameServer | null = null;
 const clients: TestClient[] = [];
-async function boot(env: Record<string, string> = {}) {
-  const cfg = loadConfig({ PORT: '0', ROOM_CAPACITY: '2', MAX_ROOMS: '2', RECONNECT_GRACE_MS: '400', SNAPSHOT_HZ: '30', STATIC_DIR: '', ...env });
-  server = await startServer(cfg, silentLogger);
+async function boot(env: Record<string, string> = {}, opts: ServerOptions = {}) {
+  const cfg = loadConfig({ PORT: '0', ROOM_CAPACITY: '2', MAX_ROOMS: '2', RECONNECT_GRACE_MS: '400', SNAPSHOT_HZ: '30', STATIC_DIR: '', DB_PATH: ':memory:', ...env });
+  server = await startServer(cfg, silentLogger, opts);
   return server.port;
 }
 const client = (port: number, origin?: string) => { const c = new TestClient(port, origin); clients.push(c); return c; };
@@ -174,6 +174,34 @@ describe('game server', () => {
     expect(await b.next('error')).toMatchObject({ code: 'bad_chat' });
     for (let i = 0; i < 3; i++) b.send({ t: 'chat', text: 'spam ' + i });
     expect(await b.next('error', (m) => m.code === 'chat_too_fast')).toMatchObject({ fatal: false });
+  });
+
+  it('creates a grave through the HTTP API and pushes it live to players', async () => {
+    const port = await boot({}, {
+      near: {
+        lookup: async () => ({ ok: true, meta: { name: 'Dog Shit', symbol: 'DOGSHIT', decimals: 18, icon: null } }),
+        verify: async (c) => ({ status: 'ok', payer: c.signerId, amount: c.minAmount }),
+      },
+    });
+    const watcher = client(port);
+    await watcher.hello();
+    const base = `http://127.0.0.1:${port}/api`;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const json = async (r: Response): Promise<any> => r.json();
+    const post = (path: string, body: unknown) => fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    expect((await json(await fetch(base + '/config'))).tiers).toEqual({ 1: '75000', 2: '370000', 3: '740000', 4: '3700000' });
+    const created = await post('/payments', { plot: 7, chain: 'near', contract: 'dogshit.near', tier: 4, message: 'rip bozo' });
+    expect(created.status).toBe(201);
+    const pay = await json(created);
+    expect(await watcher.next('plots_reserved')).toMatchObject({ reserved: [7] });
+    const confirmed = await post(`/payments/${pay.id}/confirm`, { txHash: '9FtHUFBQsZ2MG77K3x3MJ9wjX3UT8zE1TczCrhZEcG8U', accountId: 'alice.near' });
+    expect((await json(confirmed)).status).toBe('fulfilled');
+    expect(await watcher.next('grave_added')).toMatchObject({ grave: { plot: 7, tier: 4, creator: 'alice.near', message: 'rip bozo' } });
+    const all = await json(await fetch(base + '/graves'));
+    expect(all.graves).toHaveLength(1);
+    const dup = await post('/payments', { plot: 8, chain: 'near', contract: 'dogshit.near', tier: 1, message: 'again' });
+    expect(dup.status).toBe(409);
+    expect((await json(dup)).error.code).toBe('already_buried');
   });
 
   it('serves a health check', async () => {
