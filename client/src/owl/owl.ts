@@ -159,8 +159,10 @@ export function createOwl(): Owl {
         arm.rotation.z = damp(arm.rotation.z, s * (0.12 + az * walk * (1 - up) + flail), snap, dt);
         arm.scale.y = damp(arm.scale.y, lerp(1, as, walk) + up * 0.4, snap, dt);
       }
-      const lying = p.emote === 5 && walk < 0.3 && !p.air ? 0.13 : 0;   // rolling on the ground
-      rig.position.y = damp(rig.position.y, hop * walk + lying, 25, dt);
+      // rolling lies on the ground; crying kneels (the whole owl drops so the folded legs touch the ground)
+      const still = walk < 0.3 && !p.air;
+      const ground = still && p.emote === 5 ? 0.13 : still && p.emote === 4 ? -0.2 : 0;
+      rig.position.y = damp(rig.position.y, hop * walk + ground, ground !== 0 ? 10 : 25, dt);
 
       // body: waddle, bounce, squash & stretch, shake while screaming, twirl for the ballerina
       body.position.y = HIP + Math.abs(cw) * bob * walk + 0.006 * Math.sin(t * 2.2) * (1 - walk);
@@ -217,14 +219,19 @@ export function createOwl(): Owl {
         body.rotation.z = damp(body.rotation.z, 0, k, dt);
         neck.rotation.x = damp(neck.rotation.x, bow * 0.3, k, dt);
         emOpen = 0.05; squint = bow > 0.6 ? 0.1 : 1;
-      } else if (em === 'cry') {                  // hands on eyes, sobbing, wailing, tears
+      } else if (em === 'cry') {                  // 跪下哭: on its knees, sobbing into its hands, then wailing at the sky
+        const cycle = t % 4.2, wail = cycle > 3.0;  // ~3 s sobbing, ~1.2 s arms up wailing
         const sob = Math.sin(t * 18) * 0.08;
-        for (const s of [-1, 1]) { armTo(s, -2.5 + sob, -0.5); legTo(s, 0, 0.06); }
-        body.position.y = HIP + Math.abs(Math.sin(t * 9)) * 0.018;
-        body.rotation.x = damp(body.rotation.x, 0.15, k, dt);
-        body.rotation.z = damp(body.rotation.z, Math.sin(t * 9) * 0.03, k, dt);
-        neck.rotation.x = damp(neck.rotation.x, 0.22 + Math.sin(t * 9) * 0.04, k, dt);
-        emOpen = 0.85 + Math.sin(t * 6) * 0.2; squint = 0.3; crying = true;
+        for (const s of [-1, 1]) {
+          if (wail) armTo(s, -0.6 + Math.sin(t * 20 + s) * 0.15, 2.5 + Math.sin(t * 16 + s) * 0.25);
+          else armTo(s, -2.5 + sob, -0.5);
+          legTo(s, 1.25, 0.12);                   // legs folded back: kneeling
+        }
+        body.position.y = HIP + Math.abs(Math.sin(t * 9)) * (wail ? 0.03 : 0.018);
+        body.rotation.x = damp(body.rotation.x, wail ? -0.3 : 0.32, 8, dt);
+        body.rotation.z = damp(body.rotation.z, Math.sin(t * 9) * 0.04, k, dt);
+        neck.rotation.x = damp(neck.rotation.x, wail ? -0.45 : 0.25 + Math.sin(t * 9) * 0.05, 8, dt);
+        emOpen = wail ? 1.1 : 0.7 + Math.sin(t * 6) * 0.2; squint = 0.25; crying = true;
       } else if (em === 'roll') {                 // 滚来滚去: lying down, rolling back and forth, flailing
         roll = true;
         const r = Math.sin(t * 2.6);

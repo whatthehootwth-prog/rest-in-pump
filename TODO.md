@@ -7,7 +7,7 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 
 - [x] 3D graveyard world and owl mascot (cartoon style, flush open beak, smaller head)
 - [x] Each player gets a random weird walk on join (9 styles, server-assigned, cannot be changed)
-- [x] Emote bar: Dance, Club, Pray (拜拜), Cry (tears), Roll (滚来滚去) — synced to everyone; keys 1–5
+- [x] Emote bar: Dance, Club, Pray (拜拜), Cry (kneels and cries, 跪下哭), Roll (滚来滚去) — synced to everyone; keys 1–5
 - [x] Snapshot button (P) saves a PNG of the scene
 - [x] Chat (bottom left): server-relayed, validated, rate-limited, speech bubbles above heads
 - [x] Fixed low render resolution (no resolution setting)
