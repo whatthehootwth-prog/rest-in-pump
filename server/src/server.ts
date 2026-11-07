@@ -42,7 +42,7 @@ const ERROR_TEXT: Record<ErrorCode, string> = {
   not_joined: 'You are not in a room yet.',
   already_joined: 'You are already in the world.',
   room_full: 'That graveyard is full.',
-  server_full: 'Every graveyard is full right now.',
+  server_full: 'The graveyard is full right now.',
   unknown_room: 'That graveyard does not exist.',
   bad_name: 'Names must be 2-16 letters, numbers, spaces, dots, dashes or underscores.',
   rate_limited: 'Slow down — too many messages.',

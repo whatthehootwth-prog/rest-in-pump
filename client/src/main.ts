@@ -1,6 +1,6 @@
 import './style.css';
 import * as THREE from 'three';
-import { STATE_SEND_HZ, roomLabel, type PlayerState, type ServerMessage } from '../../shared/protocol.ts';
+import { STATE_SEND_HZ, type PlayerState, type ServerMessage } from '../../shared/protocol.ts';
 import { createWorld } from './world/world.ts';
 import { getOwlTemplate } from './owl/model.ts';
 import { createOwl, WALKS } from './owl/owl.ts';
@@ -43,8 +43,6 @@ async function main() {
   const hud = new Hud({
     retry: () => conn?.retryNow(),
     rename: (name) => conn?.send({ t: 'rename', name }) ?? false,
-    listRooms: () => conn?.send({ t: 'list_rooms' }) ?? false,
-    joinRoom: (room) => conn?.send({ t: 'join_room', room }) ?? false,
     nextWalk: () => me?.owl.setWalk(me.owl.walk + 1),
     setShadows: (on) => { prefs.setShadows(on); world.setShadows(on); },
     setResolution: (v) => { prefs.setResolution(v); applyResolution(v); },
@@ -70,17 +68,14 @@ async function main() {
 
   // ---- multiplayer
   let selfId: string | null = null;
-  conn = new Connection(() => ({ name: prefs.name(), resume: sessionState.token(), room: sessionState.room() }));
+  conn = new Connection(() => ({ name: prefs.name(), resume: sessionState.token(), room: null }));
   const c = conn;
   c.onStatus((s) => hud.setStatus(s));
   c.onMessage((m: ServerMessage) => {
     switch (m.t) {
       case 'welcome': {
-        const switching = hud.roomSwitchPending;
         selfId = m.you;
         sessionState.setToken(m.session);
-        sessionState.setRoom(m.room.id);
-        hud.setRoom(m.room);
         remotes.reset(m.players, m.you);
         const self = m.players.find((p) => p.id === m.you);
         if (self) {
@@ -88,7 +83,6 @@ async function main() {
           const far = Math.hypot(self.state.x - player.pos.x, self.state.z - player.pos.z) > 2;
           if (!m.resumed || far) { player.place(self.state); cam.snapTo(player.pos); }
         }
-        if (switching) hud.roomResult(true, `You are now in ${roomLabel(m.room.id)}.`);
         lastSent = null;
         break;
       }
@@ -100,12 +94,11 @@ async function main() {
         else remotes.rename(m.id, m.name);
         break;
       case 'snapshot': remotes.applySnapshot(m.ts, m.s); break;
-      case 'online': hud.setOnline(m.total, m.room); break;
-      case 'rooms': hud.setRooms(m.rooms); break;
+      case 'online': hud.setOnline(m.total); break;
+      case 'rooms': break;
       case 'error':
         if (m.fatal) break;   // the connection handles fatal errors
         if (m.code === 'bad_name') hud.nameResult(false, m.message);
-        else if (m.code === 'room_full' || m.code === 'unknown_room' || m.code === 'server_full') { hud.roomResult(false, m.message); c.send({ t: 'list_rooms' }); }
         else console.warn('[server]', m.code, m.message);
         break;
       case 'pong': break;

@@ -2,7 +2,7 @@
  * Small, failure-tolerant wrappers around Web Storage. Private windows or blocked storage must never
  * break the game — values just won't persist.
  *
- * sessionStorage (per tab): the reconnect session token and current room, so a refresh resumes you.
+ * sessionStorage (per tab): the reconnect session token, so a refresh resumes you.
  * localStorage (per browser): display name and graphics preferences.
  */
 function get(store: () => Storage, key: string): string | null {
@@ -31,6 +31,4 @@ export const prefs = {
 export const sessionState = {
   token: () => get(session, 'rip.session'),
   setToken: (v: string | null) => set(session, 'rip.session', v),
-  room: () => get(session, 'rip.room'),
-  setRoom: (v: string | null) => set(session, 'rip.room', v),
 };

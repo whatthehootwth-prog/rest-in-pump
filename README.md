@@ -66,8 +66,8 @@ TODO.md                roadmap checklist
   world, no faster than run speed (with jitter slack), sane hop height, valid walk style.
 - The server broadcasts compact room snapshots at 15 Hz. Clients draw others 120 ms in the past and
   interpolate between snapshots.
-- Rooms `graveyard-1..N` open on demand (`ROOM_CAPACITY`, `MAX_ROOMS`). New players fill the first room
-  with space. Players can switch rooms in Settings.
+- Everyone shares one graveyard (`MAX_ROOMS=1`, `ROOM_CAPACITY=50`). The server can still split players into
+  several instances if `MAX_ROOMS` is raised, but the game UI has no room picker.
 - A dropped player keeps their slot, id and name for `RECONNECT_GRACE_MS`. The session token lives in
   `sessionStorage`, so a refresh or network blip resumes the same player; a duplicated tab gets a new one.
 - Abuse limits: 1 KB max message, token-bucket rate limit (40/s, burst 60), malformed messages counted
@@ -81,7 +81,7 @@ TODO.md                roadmap checklist
   and the health check.
 - Manually in two browser sessions against the production build: both players see each other, walking
   animation and walk style sync, server-assigned and changed names propagate, the online count comes from
-  the server, refreshing resumes the same player, room switching, and auto-reconnect after a server restart.
+  the server, refreshing resumes the same player, and auto-reconnect after a server restart.
 
 ## Known limits / risks
 

@@ -41,8 +41,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     port: int(env, 'PORT', 8787, 0, 65535),
     host: env.HOST ?? (production ? '0.0.0.0' : '127.0.0.1'),
-    roomCapacity: int(env, 'ROOM_CAPACITY', 24, 1, 200),
-    maxRooms: int(env, 'MAX_ROOMS', 10, 1, 999),
+    roomCapacity: int(env, 'ROOM_CAPACITY', 50, 1, 200),
+    // one shared graveyard by default; raise only if the world is ever split into instances
+    maxRooms: int(env, 'MAX_ROOMS', 1, 1, 999),
     reconnectGraceMs: int(env, 'RECONNECT_GRACE_MS', 20000, 0, 300000),
     allowedOrigins: origins.length ? origins : null,
     staticDir: staticDir ? path.resolve(staticDir) : null,

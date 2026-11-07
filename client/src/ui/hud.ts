@@ -1,4 +1,4 @@
-import { roomLabel, sanitizeName, type RoomSummary } from '../../../shared/protocol.ts';
+import { sanitizeName } from '../../../shared/protocol.ts';
 import type { NetStatus } from '../net/connection.ts';
 import { prefs } from '../util/storage.ts';
 
@@ -11,8 +11,6 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => {
 export interface HudActions {
   retry(): void;
   rename(name: string): boolean;
-  listRooms(): boolean;
-  joinRoom(id: string): boolean;
   nextWalk(): void;
   setShadows(on: boolean): void;
   setResolution(v: string): void;
@@ -20,16 +18,14 @@ export interface HudActions {
 
 /**
  * The minimal HUD. It only ever shows information that comes from the game or the server:
- * the online count is the server's count of connected players, the room list is the server's list.
+ * the online count is the server's count of connected players.
  */
 export class Hud {
   private readonly actions: HudActions;
   private status: NetStatus = { kind: 'connecting', attempt: 1, retrying: false };
-  private currentRoom: string | null = null;
   private myName = '';
   private bannerTimer: number | null = null;
   private namePending: number | null = null;
-  private roomPending: number | null = null;
   private readonly dialog = $<HTMLDialogElement>('settings');
 
   constructor(actions: HudActions) {
@@ -40,7 +36,6 @@ export class Hud {
     $('net-retry').addEventListener('click', () => actions.retry());
     $('net-reload').addEventListener('click', () => location.reload());
     $('walk-btn').addEventListener('click', () => actions.nextWalk());
-    $('rooms-refresh').addEventListener('click', () => this.requestRooms());
     $('name-form').addEventListener('submit', (e) => { e.preventDefault(); this.submitName(); });
     $<HTMLInputElement>('name-input').addEventListener('input', () => this.validateNameField(false));
 
@@ -76,7 +71,6 @@ export class Hud {
 
   // ------------------------------------------------------------------ connection
   setStatus(s: NetStatus) {
-    const kindChanged = s.kind !== this.status.kind;
     this.status = s;
     const dot = $('net-dot'), banner = $('net-banner'), text = $('net-banner-text');
     const retry = $('net-retry'), reload = $('net-reload');
@@ -127,18 +121,11 @@ export class Hud {
         break;
     }
     if (s.kind !== 'connected') { this.clearPending(); }
-    // only rebuild the room buttons when connectivity changes (a rebuild would steal keyboard focus)
-    if (kindChanged) this.renderRoomControls();
   }
 
-  setOnline(total: number, inRoom: number) {
+  setOnline(total: number) {
     $('online-text').textContent = `${total} online`;
-    $('online').title = `${inRoom} in ${this.currentRoom ? roomLabel(this.currentRoom) : 'this graveyard'} · ${total} across all graveyards`;
-  }
-
-  setRoom(room: RoomSummary) {
-    this.currentRoom = room.id;
-    $('room-label').textContent = roomLabel(room.id);
+    $('online').title = `${total} ${total === 1 ? 'owl' : 'owls'} in the graveyard right now`;
   }
 
   setMyName(name: string) {
@@ -178,70 +165,13 @@ export class Hud {
     msg.className = 'field-msg ' + (ok ? 'ok' : 'bad');
   }
 
-  // ------------------------------------------------------------------ settings: rooms
-  private rooms: RoomSummary[] | null = null;
-  private requestRooms() {
-    const list = $('room-list');
-    if (!this.actions.listRooms()) { this.rooms = null; list.innerHTML = ''; this.roomMsg('Connect to see the graveyards.', 'bad'); return; }
-    if (!this.rooms) { list.innerHTML = ''; this.roomMsg('Loading graveyards…'); this.roomsLoading = true; }
-  }
-  private roomsLoading = false;
-  setRooms(rooms: RoomSummary[]) {
-    this.rooms = rooms;
-    if (this.roomsLoading) { this.roomsLoading = false; this.roomMsg(''); }
-    this.renderRoomControls();
-  }
-  private renderRoomControls() {
-    const list = $('room-list');
-    if (!this.rooms) return;
-    list.replaceChildren(...this.rooms.map((r) => {
-      const li = document.createElement('li');
-      const here = r.id === this.currentRoom, full = r.players >= r.capacity;
-      const label = document.createElement('span');
-      label.innerHTML = `<b></b> <span class="count"></span>`;
-      (label.firstChild as HTMLElement).textContent = roomLabel(r.id);
-      (label.lastChild as HTMLElement).textContent = r.players === 0 && !here ? 'empty' : `${r.players}/${r.capacity}`;
-      li.append(label);
-      if (here) {
-        const s = document.createElement('span'); s.className = 'here'; s.textContent = 'You are here'; li.append(s);
-      } else {
-        const b = document.createElement('button');
-        b.type = 'button'; b.className = 'btn btn-small btn-quiet';
-        b.textContent = full ? 'Full' : 'Join';
-        b.disabled = full || this.status.kind !== 'connected' || this.roomPending !== null;
-        b.addEventListener('click', () => this.joinRoom(r.id));
-        li.append(b);
-      }
-      return li;
-    }));
-  }
-  private joinRoom(id: string) {
-    if (!this.actions.joinRoom(id)) { this.roomMsg('Not connected.', 'bad'); return; }
-    this.roomMsg(`Moving to ${roomLabel(id)}…`);
-    this.roomPending = window.setTimeout(() => this.roomResult(false, 'No answer from the server. Try again.'), 6000);
-    this.renderRoomControls();
-  }
-  /** Called on the welcome that follows a room switch, or on a room error. */
-  roomResult(ok: boolean, text: string) {
-    if (this.roomPending === null) return;
-    clearTimeout(this.roomPending); this.roomPending = null;
-    this.roomMsg(text, ok ? 'ok' : 'bad');
-    if (ok) this.actions.listRooms(); else this.renderRoomControls();
-  }
-  get roomSwitchPending(): boolean { return this.roomPending !== null; }
-  private roomMsg(text: string, kind: '' | 'ok' | 'bad' = '') {
-    const m = $('room-msg'); m.textContent = text; m.className = 'field-msg ' + kind;
-  }
-
   private clearPending() {
     if (this.namePending !== null) this.nameResult(false, 'Connection lost before the name was saved.');
-    if (this.roomPending !== null) this.roomResult(false, 'Connection lost. Try again once reconnected.');
   }
 
   openSettings() {
     $('name-msg').textContent = '';
     $<HTMLInputElement>('name-input').value = this.myName;
     this.dialog.showModal();
-    this.requestRooms();
   }
 }

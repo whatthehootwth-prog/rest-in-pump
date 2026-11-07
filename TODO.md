@@ -8,11 +8,11 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 - [x] 3D graveyard world and owl mascot (cartoon style, flush open beak, 10 weird walks)
 - [x] Project structure: Vite client, Node game server, shared validated protocol
 - [x] Multiplayer: real players see each other, synced movement, walk style and animation
-- [x] Rooms with capacity limits, auto-open next room, switch room in Settings
+- [x] One shared graveyard for everyone (capacity 50 by default, `ROOM_CAPACITY`)
 - [x] Disconnect handling, 20 s resume window, refresh resumes the same player
 - [x] Reconnect with backoff and clear status banner (reconnecting / offline / full / outdated)
 - [x] Server checks: speed/teleport limits, world bounds, rate limits, origin allow-list, heartbeats
-- [x] Minimal HUD: real online count, name change, room list, graphics settings
+- [x] Minimal HUD: real online count, name change, graphics settings (no top-left panel)
 - [x] Automated tests (21): protocol, rooms, two-client WebSocket integration
 - [x] Project logo (favicon, loading screen, HUD)
 - [x] Local git repo, author `wth <whatthehootwth@gmail.com>`
@@ -71,7 +71,7 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 - [ ] Set production env: `ALLOWED_ORIGINS`, `NODE_ENV=production`, room limits
 - [ ] Uptime monitoring on `/healthz`, log collection, error alerts
 - [ ] Database backups
-- [ ] Load test: many players in one room, many rooms
+- [ ] Load test: how many players the one graveyard handles smoothly
 - [ ] Test on phones (touch controls) and low-end laptops
 - [ ] Terms of service + privacy policy, crypto/legal check for your region (you)
 - [ ] Profanity filter / reporting for names before public launch
