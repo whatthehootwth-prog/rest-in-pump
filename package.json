@@ -1,0 +1,31 @@
+{
+  "name": "rest-in-pump",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "REST IN PUMP — a multiplayer cartoon graveyard.",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev:server": "node --watch server/src/index.ts",
+    "dev:client": "vite",
+    "build": "vite build",
+    "start": "node server/src/index.ts",
+    "typecheck": "tsc -p tsconfig.server.json && tsc -p tsconfig.client.json",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "three": "0.160.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/three": "0.160.0",
+    "@types/ws": "^8.18.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  }
+}

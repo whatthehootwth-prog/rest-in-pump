@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0e0d12">
+  <meta name="description" content="REST IN PUMP — a multiplayer cartoon graveyard. Walk around with the other owls.">
+  <title>REST IN PUMP</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+  <canvas id="game" aria-label="The graveyard. Use the arrow keys to walk."></canvas>
+
+  <div id="loading" class="loading" role="status" aria-live="polite">
+    <div class="wordmark wordmark-lg">REST IN PUMP</div>
+    <p id="loading-text">Loading the graveyard…</p>
+  </div>
+
+  <header class="hud-top">
+    <div class="brand">
+      <span class="wordmark">REST IN PUMP</span>
+      <span id="room-label" class="muted">Not connected</span>
+    </div>
+    <div class="hud-right">
+      <div id="online" class="chip" role="status" aria-live="polite">
+        <span id="net-dot" class="dot dot-wait" aria-hidden="true"></span>
+        <span id="online-text">Connecting…</span>
+      </div>
+      <button id="settings-btn" class="icon-btn" type="button" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6a.5.5 0 0 0 .1-.6l-1.9-3.3a.5.5 0 0 0-.6-.2l-2.4 1a7.4 7.4 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.4h-3.8a.5.5 0 0 0-.5.4l-.4 2.6c-.6.3-1.2.6-1.7 1l-2.4-1a.5.5 0 0 0-.6.2L2.5 8.8a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.6a.5.5 0 0 0-.1.6l1.9 3.3c.1.2.4.3.6.2l2.4-1c.5.4 1.1.7 1.7 1l.4 2.6c0 .2.3.4.5.4h3.8c.2 0 .5-.2.5-.4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.4 1c.2.1.5 0 .6-.2l1.9-3.3a.5.5 0 0 0-.1-.6L19.4 13ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="net-banner" class="banner" role="alert" hidden>
+    <span id="net-banner-text"></span>
+    <button id="net-retry" class="btn btn-small" type="button" hidden>Retry now</button>
+    <button id="net-reload" class="btn btn-small" type="button" hidden>Reload</button>
+  </div>
+
+  <div id="controls-hint" class="hint" hidden>
+    <p><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> walk · <kbd>Shift</kbd> run · <kbd>Space</kbd> hop · <kbd>F</kbd> change walk</p>
+    <p>Drag or <kbd>Q</kbd> <kbd>E</kbd> to turn the camera · scroll to zoom</p>
+    <button id="hint-close" class="link" type="button">Got it</button>
+  </div>
+
+  <button id="walk-btn" class="chip chip-btn walk-chip" type="button" title="Change walk (F)">
+    Walk: <b id="walk-name">Goose kick</b> <kbd class="hide-touch">F</kbd>
+  </button>
+
+  <div class="touch" aria-hidden="true">
+    <div class="pad">
+      <span></span><button data-key="ArrowUp" tabindex="-1">▲</button><span></span>
+      <button data-key="ArrowLeft" tabindex="-1">◀</button><button data-key="ArrowDown" tabindex="-1">▼</button><button data-key="ArrowRight" tabindex="-1">▶</button>
+    </div>
+    <button class="hop" data-key="Space" tabindex="-1">Hop</button>
+  </div>
+
+  <dialog id="settings" aria-labelledby="settings-title">
+    <div class="dialog-head">
+      <h2 id="settings-title">Settings</h2>
+      <button id="settings-close" class="icon-btn" type="button" aria-label="Close settings">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg>
+      </button>
+    </div>
+
+    <section>
+      <h3><label for="name-input">Name</label></h3>
+      <form id="name-form" class="row" novalidate>
+        <input id="name-input" name="name" maxlength="16" autocomplete="nickname" spellcheck="false" aria-describedby="name-msg">
+        <button id="name-save" class="btn" type="submit">Save</button>
+      </form>
+      <p id="name-msg" class="field-msg" role="status" aria-live="polite"></p>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h3>Graveyard</h3>
+        <button id="rooms-refresh" class="link" type="button">Refresh</button>
+      </div>
+      <ul id="room-list" class="room-list" aria-live="polite"></ul>
+      <p id="room-msg" class="field-msg" role="status" aria-live="polite"></p>
+    </section>
+
+    <section>
+      <h3>Graphics</h3>
+      <label class="check"><input id="opt-shadows" type="checkbox"> Shadows</label>
+      <label class="select-row">Resolution
+        <select id="opt-res">
+          <option value="high">High</option>
+          <option value="balanced">Balanced</option>
+          <option value="low">Low</option>
+        </select>
+      </label>
+    </section>
+
+    <section>
+      <h3>Controls</h3>
+      <dl class="controls">
+        <dt><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> / <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Walk</dd>
+        <dt><kbd>Shift</kbd></dt><dd>Run</dd>
+        <dt><kbd>Space</kbd></dt><dd>Hop</dd>
+        <dt><kbd>F</kbd></dt><dd>Change walk</dd>
+        <dt>Drag, <kbd>Q</kbd> <kbd>E</kbd></dt><dd>Turn camera</dd>
+        <dt>Scroll</dt><dd>Zoom</dd>
+      </dl>
+    </section>
+
+    <p class="muted small">Connection: <span id="net-detail">—</span></p>
+  </dialog>
+
+  <div id="fatal" class="fatal" role="alert" hidden></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
