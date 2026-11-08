@@ -270,23 +270,27 @@ body.landing-open #net-banner { display: none !important; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 body.landing-open .wallet-wrap { display: none; }
 
-/* ---------------------------------------------------------------- plot card (walk up to a grave) */
-.plot-card {
-  position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; z-index: 3; width: min(360px, calc(100vw - 32px));
-  padding: 12px 14px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px;
-}
+/* ---------------------------------------------------------------- plot prompt (walk up to a plot) */
+.plot-card { position: fixed; left: 50%; transform: translateX(-50%); bottom: 92px; z-index: 3; max-width: calc(100vw - 32px); }
 body.landing-open .plot-card { display: none !important; }
-.pc-title { font-weight: 700; font-size: 15px; }
-.pc-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
-.pc-text { margin: 4px 0 10px; color: #d9d6cf; font-size: 13px; }
-.pc-note { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
-.pc-note b { color: var(--text); font-weight: 600; }
-.pc-meme { display: flex; gap: 10px; align-items: center; }
-.pc-icon { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex: none; background: #fff; }
-.pc-icon-ph { display: grid; place-items: center; background: #3b3846; color: var(--text); font-weight: 800; }
-.pc-msg { margin: 10px 0 0; padding: 8px 10px; border-left: 2px solid var(--focus); background: #1d1c23; font-size: 13px; font-style: italic; overflow-wrap: anywhere; }
-.pc-contract { margin: 6px 0 0; font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.pc-pill {
+  display: flex; align-items: center; gap: 8px; max-width: 100%; height: 40px; padding: 0 8px 0 10px; white-space: nowrap;
+  color: var(--text); font: inherit; font-size: 13px; background: rgba(17, 16, 21, 0.86); border: 1px solid var(--line); border-radius: 999px;
+  cursor: pointer;
+}
+button.pc-pill:hover:not(:disabled) { border-color: var(--focus); }
+button.pc-pill:disabled { cursor: default; color: var(--muted); }
+.pc-pill.pc-info { cursor: default; padding: 0 14px; color: var(--muted); }
+.pc-icon { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex: none; background: #fff; }
+.pc-icon-ph { display: inline-grid; place-items: center; background: #3b3846; color: var(--text); font-size: 12px; font-weight: 800; }
+.pc-what { overflow: hidden; text-overflow: ellipsis; }
+.pc-what b { font-weight: 700; }
+.pc-lvl { color: var(--muted); }
+.pc-sep { width: 1px; height: 18px; background: var(--line); flex: none; }
+.pc-action { color: var(--focus); font-weight: 600; }
+.pc-pill kbd { margin-left: 2px; }
 @media (max-width: 1000px) { .plot-card { bottom: 16px; left: auto; right: 16px; transform: none; } }
+@media (max-width: 480px) { .pc-lvl { display: none; } }
 
 /* ---------------------------------------------------------------- grave + offering dialogs */
 #grave-dlg, #offer-dlg { width: min(520px, calc(100vw - 24px)); }
@@ -330,7 +334,6 @@ body.landing-open .plot-card { display: none !important; }
 .progress span { display: block; height: 100%; background: var(--focus); }
 .pc-ok { color: #b7e3bf; }
 .pc-bad { color: #f0b3ab; }
-.plot-card .btn { margin-top: 10px; }
 .summary { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 13px; }
 .summary dt { color: var(--muted); }
 .summary dd { margin: 0; overflow-wrap: anywhere; }

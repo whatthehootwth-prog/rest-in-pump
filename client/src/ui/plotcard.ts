@@ -3,9 +3,11 @@ import type { PlotFocus } from '../world/graves.ts';
 import { h } from './dom.ts';
 
 /**
- * The small card shown when the player walks up to a plot: an empty plot (create a grave), one being created,
- * or a grave (meme, level, offering count, last words, and the offering button). Kept short on purpose;
- * the offering dialog has the details.
+ * The one-line prompt shown when the player stands at a plot, game style:
+ *   [icon] $NGMI · Level 3 Honored · Leave an offering [E]
+ *   Empty plot #12 · Create a grave [E]
+ * The whole pill is the button. It hides while the player is posing (an emote is playing) so the scene stays
+ * clear for screenshots; details live in the dialogs.
  */
 export class PlotCard {
   private readonly el = document.getElementById('plot-card') as HTMLElement;
@@ -19,43 +21,36 @@ export class PlotCard {
     this.onOffer = onOffer;
   }
 
-  show(focus: PlotFocus | null): void {
-    const key = !focus ? '' : focus.kind === 'grave'
-      ? `g${focus.grave.id}:${focus.grave.offerings}:${this.canAct}`
-      : `${focus.kind}${focus.plot.id}:${this.canAct}`;
+  /** @param posing true while an emote is playing: the prompt hides. */
+  show(focus: PlotFocus | null, posing = false): void {
+    const f = posing ? null : focus;
+    const key = !f ? '' : f.kind === 'grave'
+      ? `g${f.grave.id}:${f.grave.level}:${f.grave.meme.symbol}:${this.canAct}`
+      : `${f.kind}${f.plot.id}:${this.canAct}`;
     if (key === this.key) return;
     this.key = key;
-    if (!focus) { this.el.hidden = true; this.el.replaceChildren(); return; }
+    if (!f) { this.el.hidden = true; this.el.replaceChildren(); return; }
     this.el.hidden = false;
-    const waiting = this.canAct ? [] : [h('p', { class: 'pc-note' }, 'Waiting for the connection to the graveyard…')];
-    if (focus.kind === 'empty') {
-      this.el.replaceChildren(
-        h('div', { class: 'pc-title' }, `Empty plot #${focus.plot.id}`),
-        h('p', { class: 'pc-text' }, 'Give a fallen memecoin a grave the whole graveyard can visit.'),
-        h('button', { class: 'btn', type: 'button', disabled: !this.canAct, onclick: () => this.onCreate(focus.plot.id) },
-          'Create a grave here ', h('kbd', { class: 'hide-touch' }, 'E')),
-        ...waiting,
-      );
-    } else if (focus.kind === 'reserved') {
-      this.el.replaceChildren(
-        h('div', { class: 'pc-title' }, `Plot #${focus.plot.id}`),
-        h('p', { class: 'pc-text' }, 'Someone is creating a grave here right now.'),
-      );
+    const kbd = h('kbd', { class: 'hide-touch' }, 'E');
+    const action = (label: string, onclick: () => void, lead: (Node | string)[]) => h('button', {
+      class: 'pc-pill', type: 'button', disabled: !this.canAct, onclick,
+      title: this.canAct ? undefined : 'Waiting for the connection to the graveyard…',
+    }, ...lead, h('span', { class: 'pc-action' }, this.canAct ? label : 'Connecting…'), this.canAct ? kbd : null);
+
+    if (f.kind === 'empty') {
+      this.el.replaceChildren(action('Create a grave', () => this.onCreate(f.plot.id), [h('span', { class: 'pc-what' }, `Empty plot #${f.plot.id}`), sep()]));
+    } else if (f.kind === 'reserved') {
+      this.el.replaceChildren(h('div', { class: 'pc-pill pc-info' }, `Plot #${f.plot.id} · someone is creating a grave here`));
     } else {
-      const g = focus.grave;
+      const g = f.grave;
       const icon = g.meme.icon
         ? h('img', { class: 'pc-icon', src: g.meme.icon, alt: '' })
-        : h('div', { class: 'pc-icon pc-icon-ph', 'aria-hidden': 'true' }, (g.meme.symbol || '?').slice(0, 1).toUpperCase());
-      this.el.replaceChildren(
-        h('div', { class: 'pc-meme' }, icon,
-          h('div', {},
-            h('div', { class: 'pc-title' }, `$${g.meme.symbol}`),
-            h('div', { class: 'pc-sub' }, `Level ${g.level} · ${levelName(g.level)} · ${g.offerings.toLocaleString('en-US')} ${g.offerings === 1 ? 'offering' : 'offerings'}`))),
-        h('blockquote', { class: 'pc-msg' }, g.message),
-        h('button', { class: 'btn', type: 'button', disabled: !this.canAct, onclick: () => this.onOffer(g) },
-          'Leave an offering ', h('kbd', { class: 'hide-touch' }, 'E')),
-        ...waiting,
-      );
+        : h('span', { class: 'pc-icon pc-icon-ph', 'aria-hidden': 'true' }, (g.meme.symbol || '?').slice(0, 1).toUpperCase());
+      this.el.replaceChildren(action('Leave an offering', () => this.onOffer(g), [
+        icon,
+        h('span', { class: 'pc-what' }, h('b', {}, `$${g.meme.symbol}`), h('span', { class: 'pc-lvl' }, ` · Level ${g.level} ${levelName(g.level).replace(' Grave', '')}`)),
+        sep(),
+      ]));
     }
   }
 
@@ -66,3 +61,5 @@ export class PlotCard {
     else if (focus?.kind === 'grave') this.onOffer(focus.grave);
   }
 }
+
+const sep = () => h('span', { class: 'pc-sep', 'aria-hidden': 'true' });
