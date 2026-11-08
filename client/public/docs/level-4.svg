@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="600" height="600">
+  <rect width="600" height="600" fill="#140f2a"/>
+  <rect y="300" width="600" height="300" fill="#4a2462"/>
+  <circle cx="500" cy="95" r="38" fill="#f3efd8" opacity="0.8"/>
+  
+      <circle cx="300" cy="290" r="230" fill="#ffd34d" opacity=".12"/>
+      <path d="M80 482 Q300 440 520 482 Z" fill="#2a3d2e" stroke="#1b1a1f" stroke-width="8"/>
+      <rect x="135" y="440" width="330" height="34" rx="5" fill="#c8bfae" stroke="#1b1a1f" stroke-width="8"/>
+      <rect x="160" y="210" width="280" height="235" fill="#f2ede2" stroke="#1b1a1f" stroke-width="8"/>
+      <path d="M135 215 L300 110 L465 215 Z" fill="#f2ede2" stroke="#1b1a1f" stroke-width="8" stroke-linejoin="round"/>
+      <path d="M175 205 L300 128 L425 205" fill="none" stroke="#ffd34d" stroke-width="7"/>
+      <rect x="169" y="220" width="32" height="222" fill="#c8bfae" stroke="#1b1a1f" stroke-width="6"/><rect x="399" y="220" width="32" height="222" fill="#c8bfae" stroke="#1b1a1f" stroke-width="6"/>
+      <path d="M245 445 V330 Q245 290 300 290 Q355 290 355 330 V445 Z" fill="#2a2140" stroke="#1b1a1f" stroke-width="7"/>
+      
+    <circle cx="300" cy="245" r="45" fill="#1b1a1f"/>
+    <clipPath id="logo"><circle cx="300" cy="245" r="40"/></clipPath>
+    <circle cx="300" cy="245" r="40" fill="#ffffff"/>
+    <text x="300" y="257.8" text-anchor="middle" font-size="36" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" fill="#1b1a1f">RU</text>
+      <circle cx="300" cy="300" r="6" fill="#ffd34d"/>
+      <path d="M90 108 L94 116 L102 120 L94 124 L90 132 L86 124 L78 120 L86 116 Z" fill="#ffd34d"/><path d="M400 58 L404 66 L412 70 L404 74 L400 82 L396 74 L388 70 L396 66 Z" fill="#ffd34d"/><path d="M70 248 L74 256 L82 260 L74 264 L70 272 L66 264 L58 260 L66 256 Z" fill="#ffd34d"/><path d="M530 218 L534 226 L542 230 L534 234 L530 242 L526 234 L518 230 L526 226 Z" fill="#ffd34d"/>
+  <rect x="0" y="490" width="600" height="110" fill="#1b1a1f"/>
+  <text x="32" y="536" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="34" fill="#ffffff">$RUG</text>
+  <text x="32" y="572" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="17" fill="#ffd34d">LEVEL 4 · LEGENDARY GRAVE</text>
+  <text x="568" y="536" text-anchor="end" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="22" fill="#ffffff">4,200 OFFERINGS</text>
+  <text x="568" y="572" text-anchor="end" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="15" fill="#9a97a3">MAX LEVEL</text>
+  <text x="300" y="40" text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="16" fill="#ffffff" opacity=".55" letter-spacing="4">REST IN PUMP · MEMORIAL</text>
+</svg>

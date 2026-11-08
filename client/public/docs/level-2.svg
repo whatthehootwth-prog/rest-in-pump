@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="600" height="600">
+  <rect width="600" height="600" fill="#1d2533"/>
+  <rect y="300" width="600" height="300" fill="#2e3a4c"/>
+  <circle cx="500" cy="95" r="38" fill="#f3efd8" opacity="0.8"/>
+  
+      <path d="M150 478 Q300 430 450 478 Z" fill="#34452f" stroke="#1b1a1f" stroke-width="8"/>
+      <path d="M205 465 V250 Q205 160 300 160 Q395 160 395 250 V465 Z" fill="#9b9a95" stroke="#1b1a1f" stroke-width="8"/>
+      <path d="M225 455 V255 Q225 182 300 182" fill="none" stroke="#ffffff" stroke-width="6" opacity=".25"/>
+      
+    <circle cx="300" cy="270" r="63" fill="#1b1a1f"/>
+    <clipPath id="logo"><circle cx="300" cy="270" r="58"/></clipPath>
+    <circle cx="300" cy="270" r="58" fill="#ffffff"/>
+    <text x="300" y="288.56" text-anchor="middle" font-size="52.2" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" fill="#1b1a1f">RU</text>
+      <text x="300" y="385" text-anchor="middle" font-size="22" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" fill="#74736e">R.I.P.</text>
+      <rect x="420" y="420" width="22" height="46" rx="4" fill="#f5ecd2" stroke="#1b1a1f" stroke-width="6"/>
+      <path d="M431 398 q10 12 0 20 q-10 -8 0 -20 Z" fill="#ffb53d" stroke="#1b1a1f" stroke-width="4"/>
+  <rect x="0" y="490" width="600" height="110" fill="#1b1a1f"/>
+  <text x="32" y="536" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="34" fill="#ffffff">$RUG</text>
+  <text x="32" y="572" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="17" fill="#c9c2b0">LEVEL 2 · REMEMBERED GRAVE</text>
+  <text x="568" y="536" text-anchor="end" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="22" fill="#ffffff">42 OFFERINGS</text>
+  <text x="568" y="572" text-anchor="end" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="15" fill="#9a97a3">58 TO NEXT LEVEL</text>
+  <text x="300" y="40" text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="16" fill="#ffffff" opacity=".55" letter-spacing="4">REST IN PUMP · MEMORIAL</text>
+</svg>

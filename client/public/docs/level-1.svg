@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="600" height="600">
+  <rect width="600" height="600" fill="#20242c"/>
+  <rect y="300" width="600" height="300" fill="#2c3038"/>
+  <circle cx="500" cy="95" r="38" fill="#f3efd8" opacity="0.35"/>
+  
+      <path d="M190 470 Q300 395 410 470 Z" fill="#3b3328" stroke="#1b1a1f" stroke-width="8"/>
+      <rect x="282" y="190" width="36" height="270" rx="6" fill="#7a5a3a" stroke="#1b1a1f" stroke-width="8"/>
+      <rect x="205" y="250" width="190" height="34" rx="6" fill="#7a5a3a" stroke="#1b1a1f" stroke-width="8"/>
+      <path d="M292 210 v230 M215 260 h170" stroke="#5c4128" stroke-width="4" opacity=".6"/>
+      
+    <circle cx="300" cy="345" r="51" fill="#1b1a1f"/>
+    <clipPath id="logo"><circle cx="300" cy="345" r="46"/></clipPath>
+    <circle cx="300" cy="345" r="46" fill="#ffffff"/>
+    <text x="300" y="359.72" text-anchor="middle" font-size="41.4" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" fill="#1b1a1f">RU</text>
+  <rect x="0" y="490" width="600" height="110" fill="#1b1a1f"/>
+  <text x="32" y="536" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="34" fill="#ffffff">$RUG</text>
+  <text x="32" y="572" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="17" fill="#8d8a80">LEVEL 1 · FORGOTTEN GRAVE</text>
+  <text x="568" y="536" text-anchor="end" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="22" fill="#ffffff">3 OFFERINGS</text>
+  <text x="568" y="572" text-anchor="end" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="15" fill="#9a97a3">7 TO NEXT LEVEL</text>
+  <text x="300" y="40" text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="16" fill="#ffffff" opacity=".55" letter-spacing="4">REST IN PUMP · MEMORIAL</text>
+</svg>

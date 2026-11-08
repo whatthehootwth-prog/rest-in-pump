@@ -9,8 +9,10 @@ export class Landing {
   private readonly online = document.getElementById('landing-online') as HTMLElement;
   private pollTimer: number | null = null;
   private entered = false;
+  /** Set once the world is ready; Enter stays disabled until show(). */
+  onEnter: () => void = () => {};
 
-  constructor(onEnter: () => void) {
+  constructor() {
     const enter = document.getElementById('enter-btn') as HTMLButtonElement;
     enter.addEventListener('click', () => {
       if (this.entered) return;
@@ -19,11 +21,39 @@ export class Landing {
       this.root.classList.add('leaving');
       document.body.classList.remove('landing-open');
       setTimeout(() => { this.root.hidden = true; }, 400);
-      onEnter();
+      this.onEnter();
     });
     document.getElementById('about-btn')!.addEventListener('click', () => this.about.showModal());
     document.getElementById('about-close')!.addEventListener('click', () => this.about.close());
     this.about.addEventListener('click', (e) => { if (e.target === this.about) this.about.close(); });
+    this.setupTabs();
+  }
+
+  /** Docs-style side tabs in the "What is Rest In Pump?" dialog (click, or arrow keys between tabs). */
+  private setupTabs() {
+    const tabs = [...this.about.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const main = this.about.querySelector<HTMLElement>('.docs-main');
+    const select = (tab: HTMLButtonElement, focus: boolean) => {
+      for (const t of tabs) {
+        const on = t === tab;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        const panel = document.getElementById(t.getAttribute('aria-controls') ?? '');
+        if (panel) panel.hidden = !on;
+      }
+      if (main) main.scrollTop = 0;
+      tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      if (focus) tab.focus();
+    };
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => select(tab, false));
+      tab.addEventListener('keydown', (e) => {
+        const next = ['ArrowDown', 'ArrowRight'].includes(e.key) ? 1 : ['ArrowUp', 'ArrowLeft'].includes(e.key) ? -1 : 0;
+        if (!next) return;
+        e.preventDefault();
+        select(tabs[(i + next + tabs.length) % tabs.length], true);
+      });
+    });
   }
 
   /** The intro is already on screen from the HTML; this turns Enter on once the world is ready. */

@@ -212,8 +212,41 @@ body.landing-open #net-banner { display: none !important; }
 .landing-online { min-height: 20px; margin: 18px 0 0; font-size: 13px; color: var(--muted); }
 .landing-online .dot { display: inline-block; margin-right: 7px; vertical-align: 1px; }
 
-#about { width: min(520px, calc(100vw - 24px)); }
-#about .lead { margin: 0; font-size: 15px; line-height: 1.55; }
+/* ---------------------------------------------------------------- "What is Rest In Pump?" docs */
+#about.docs { width: min(900px, calc(100vw - 24px)); height: min(640px, calc(100vh - 48px)); overflow: hidden; }
+#about.docs[open] { display: flex; flex-direction: column; }
+.docs-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px 1fr; }
+.docs-nav { display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; border-right: 1px solid var(--line); overflow-y: auto; }
+.docs-nav button {
+  padding: 9px 12px; text-align: left; color: var(--muted); font: inherit; font-size: 14px; cursor: pointer;
+  background: none; border: 0; border-left: 2px solid transparent; border-radius: 0 6px 6px 0;
+}
+.docs-nav button:hover { color: var(--text); background: #1d1c23; }
+.docs-nav button[aria-selected="true"] { color: var(--text); background: #1d1c23; border-left-color: var(--focus); font-weight: 600; }
+.docs-main { overflow-y: auto; padding: 0 4px; }
+#about .doc-panel { padding: 20px 22px 8px; border: 0; }
+#about .doc-panel h3 { margin: 0 0 12px; font-size: 20px; text-transform: none; letter-spacing: 0; color: var(--text); font-weight: 750; }
+#about .doc-panel h4 { margin: 20px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--focus); }
+#about .doc-panel p { margin: 0 0 10px; font-size: 14px; line-height: 1.6; color: #d9d6cf; }
+#about .doc-panel .about-list { margin-top: 4px; }
+#about .doc-panel a { color: var(--focus); }
+#about .lead { margin: 0 0 4px; font-size: 16px; line-height: 1.55; color: var(--text); }
+.doc-fig { margin: 14px 0 16px; }
+.doc-fig img { display: block; width: 100%; max-height: 260px; object-fit: contain; background: #121117; border: 1px solid var(--line); border-radius: 10px; }
+.doc-fig figcaption { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.doc-levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.doc-levels .doc-fig { margin: 4px 0 0; }
+.doc-levels figcaption { line-height: 1.4; }
+.doc-levels figcaption b { color: var(--text); font-weight: 650; }
+@media (max-width: 700px) {
+  .docs-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .docs-nav { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--line); padding: 6px 8px; overflow-x: auto; scrollbar-width: none; }
+  .docs-nav::-webkit-scrollbar { display: none; }
+  .docs-nav button { flex: none; border-left: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; padding: 8px 10px; }
+  .docs-nav button[aria-selected="true"] { border-bottom-color: var(--focus); }
+  #about .doc-panel { padding: 16px 14px 6px; }
+  .doc-levels { grid-template-columns: repeat(2, 1fr); }
+}
 #about h3 .tag {
   margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: #2b2a20; color: var(--focus);
   font-size: 10px; letter-spacing: 0.06em;

@@ -28,6 +28,8 @@ import { prefs, sessionState } from './util/storage.ts';
 const nextFrame = () => new Promise<void>((r) => (document.hidden ? setTimeout(r, 0) : requestAnimationFrame(() => setTimeout(r, 0))));
 
 async function main() {
+  // the intro is on screen from the first paint: wire it up before the heavy 3D setup ("What is Rest In Pump?" works at once)
+  const landing = new Landing();
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   let renderer: THREE.WebGLRenderer;
   try {
@@ -262,7 +264,7 @@ async function main() {
     if (p.kind === 'grave') await createGrave.resume(p, redirectTx);
     else await offering.resume(p, redirectTx);
   };
-  const landing = new Landing(enterWorld);
+  landing.onEnter = enterWorld;
 
   // ---- render loop
   let last = performance.now(), t = 0;

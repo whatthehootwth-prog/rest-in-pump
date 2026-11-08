@@ -36,8 +36,10 @@ export interface Owl {
 }
 
 const blobGeo = new THREE.CircleGeometry(0.4, 32);
-const tearGeo = (() => { const g = new THREE.SphereGeometry(0.045, 12, 8); g.scale(1, 1.5, 0.7); return g; })();
+const tearGeo = (() => { const g = new THREE.SphereGeometry(0.075, 12, 8); g.scale(1, 1.5, 0.8); return g; })();
+const puddleGeo = new THREE.CircleGeometry(0.55, 28);
 let tearMat: THREE.MeshBasicMaterial | null = null;
+let puddleMat: THREE.MeshBasicMaterial | null = null;
 let blobMat: THREE.MeshBasicMaterial | null = null;
 
 /**
@@ -70,12 +72,18 @@ export function createOwl(): Owl {
   };
   eyes.forEach(setPupil);
 
-  // tears (only visible while crying), in head units, just under each eye
+  // tears (only visible while crying), in head units: a fountain of drops shooting sideways out of each eye
   tearMat ??= new THREE.MeshBasicMaterial({ color: 0x9fdcff, transparent: true, opacity: 0.9, depthWrite: false });
-  const tears = EYES.flatMap((e, i) => [0, 1].map((k) => {
+  const TEARS_PER_EYE = 9;
+  // a puddle of tears grows under the owl while it cries
+  puddleMat ??= new THREE.MeshBasicMaterial({ color: 0x7fc8f0, transparent: true, opacity: 0.5, depthWrite: false });
+  const puddle = new THREE.Mesh(puddleGeo, puddleMat);
+  puddle.rotation.x = -Math.PI / 2; puddle.position.y = 0.015; puddle.scale.setScalar(0.001); puddle.visible = false; puddle.renderOrder = 1;
+  root.add(puddle);
+  const tears = EYES.flatMap((e, i) => Array.from({ length: TEARS_PER_EYE }, (_, k) => {
     const m = new THREE.Mesh(tearGeo, tearMat!);
     m.visible = false; head.add(m);
-    return { m, x: e.x + (k ? 0.05 : -0.05), y: e.y - e.r * 0.8, ph: i * 0.37 + k * 0.5 };
+    return { m, x: e.x, y: e.y - e.r * 0.55, dir: e.x < 0 ? -1 : 1, ph: k / TEARS_PER_EYE + i * 0.07, spread: 0.75 + (k % 3) * 0.2 };
   }));
 
   const st = {
@@ -212,38 +220,51 @@ export function createOwl(): Owl {
         body.rotation.x = damp(body.rotation.x, 0.12, k, dt);
         neck.rotation.x = Math.sin(b * 2) * 0.45;
         emOpen = 0.85;
-      } else if (em === 'pray') {                 // hands together, bowing over and over
-        const bow = (1 - Math.cos((t * Math.PI * 2) / 1.8)) / 2;
-        for (const s of [-1, 1]) { armTo(s, -1.35 + bow * 0.3, -0.6); legTo(s, 0, 0.04); }
-        body.rotation.x = damp(body.rotation.x, bow * 0.7, k, dt);
-        body.rotation.z = damp(body.rotation.z, 0, k, dt);
-        neck.rotation.x = damp(neck.rotation.x, bow * 0.3, k, dt);
-        emOpen = 0.05; squint = bow > 0.6 ? 0.1 : 1;
-      } else if (em === 'cry') {                  // on its knees, sobbing into its hands, then wailing at the sky
-        const cycle = t % 4.2, wail = cycle > 3.0;  // ~3 s sobbing, ~1.2 s arms up wailing
-        const sob = Math.sin(t * 18) * 0.08;
+      } else if (em === 'pray') {                 // frantic worship: three quick bows, hands shoot up, one huge bow to the ground
+        const c = t % 2.4;
+        const quick = c < 1.2, up = c >= 1.2 && c < 1.75;
+        const bow = quick ? Math.pow(Math.abs(Math.sin((c / 0.4) * Math.PI)), 0.7) * 0.75
+          : up ? -0.25 : Math.sin(((c - 1.75) / 0.65) * Math.PI) * 1.35;
         for (const s of [-1, 1]) {
-          if (wail) armTo(s, -0.6 + Math.sin(t * 20 + s) * 0.15, 2.5 + Math.sin(t * 16 + s) * 0.25);
-          else armTo(s, -2.5 + sob, -0.5);
-          legTo(s, 1.25, 0.12);                   // legs folded back: kneeling
+          if (up) armTo(s, -0.25 + Math.sin(t * 40) * 0.08, 2.85);          // palms together high above the head
+          else if (quick) armTo(s, -1.45 + Math.sin(t * 30 + s) * 0.12, -0.62); // hands rubbing together in front
+          else armTo(s, -2.6 + bow * 0.4, 0.25);                             // arms sweep forward to the ground
+          legTo(s, up ? 0.15 : 0, up ? 0.22 : 0.05);
         }
-        body.position.y = HIP + Math.abs(Math.sin(t * 9)) * (wail ? 0.03 : 0.018);
-        body.rotation.x = damp(body.rotation.x, wail ? -0.3 : 0.32, 8, dt);
-        body.rotation.z = damp(body.rotation.z, Math.sin(t * 9) * 0.04, k, dt);
-        neck.rotation.x = damp(neck.rotation.x, wail ? -0.45 : 0.25 + Math.sin(t * 9) * 0.05, 8, dt);
-        emOpen = wail ? 1.1 : 0.7 + Math.sin(t * 6) * 0.2; squint = 0.25; crying = true;
-      } else if (em === 'roll') {                 // lying down, rolling back and forth, flailing
+        body.position.y = HIP + (up ? Math.abs(Math.sin(((c - 1.2) / 0.55) * Math.PI)) * 0.12 : 0);
+        body.rotation.x = damp(body.rotation.x, bow, 18, dt);
+        body.rotation.z = damp(body.rotation.z, up ? Math.sin(t * 22) * 0.08 : 0, k, dt);
+        neck.rotation.x = damp(neck.rotation.x, up ? -0.4 : bow * 0.35, 18, dt);
+        emOpen = up ? 0.9 : 0.06 + Math.abs(Math.sin(t * 14)) * 0.22;      // mumbling, then a joyful shout
+        squint = up ? 1 : 0.1;
+      } else if (em === 'cry') {                  // total breakdown: pound the ground, wail at the sky, collapse sobbing
+        const c = t % 5.4, tremble = Math.sin(t * 46) * 0.05;
+        const pound = c < 2.2, wail = c >= 2.2 && c < 3.7;
+        for (const s of [-1, 1]) {
+          const hit = Math.max(0, Math.sin(t * 13 + (s > 0 ? 0 : Math.PI)));
+          if (pound) armTo(s, -0.35 - hit * 1.25, 0.25);                     // fists hammering the ground in turn
+          else if (wail) armTo(s, -0.5 + Math.sin(t * 24 + s) * 0.3, 2.65 + Math.sin(t * 19 + s) * 0.3);
+          else armTo(s, -2.2 + Math.sin(t * 16 + s * 2) * 0.35, 0.55);        // collapsed, weakly beating the floor
+          legTo(s, 1.25, 0.12);                                              // kneeling
+        }
+        body.position.y = HIP + Math.abs(Math.sin(t * (wail ? 14 : 11))) * (wail ? 0.05 : 0.03);
+        body.rotation.x = damp(body.rotation.x, pound ? 0.75 + Math.sin(t * 13) * 0.12 : wail ? -0.45 : 1.15 + Math.sin(t * 7) * 0.08, 9, dt);
+        body.rotation.z = damp(body.rotation.z, tremble + (pound ? Math.sin(t * 6.5) * 0.12 : 0), 30, dt);
+        neck.rotation.x = damp(neck.rotation.x, wail ? -0.7 : pound ? 0.15 + Math.sin(t * 13) * 0.15 : 0.35, 10, dt);
+        neck.rotation.z = damp(neck.rotation.z, wail ? Math.sin(t * 5) * 0.3 : tremble * 2, 12, dt);
+        emOpen = wail ? 1.15 : 0.85 + Math.sin(t * 9) * 0.25; squint = 0.18; crying = true;
+      } else if (em === 'roll') {                 // a crying tantrum: rolling back and forth, kicking and flailing, wailing
         roll = true;
-        const r = Math.sin(t * 2.6);
+        const r = Math.sin(t * 3.2);
         rig.rotation.x = damp(rig.rotation.x, -1.5, 8, dt);
-        rig.rotation.y = damp(rig.rotation.y, r * 2.4, 10, dt);
-        rig.position.x = damp(rig.position.x, r * 0.3, 10, dt);
+        rig.rotation.y = damp(rig.rotation.y, r * 2.6, 12, dt);
+        rig.position.x = damp(rig.position.x, r * 0.35, 12, dt);
         rig.position.z = damp(rig.position.z, 0.42, 8, dt);
         for (const s of [-1, 1]) {
-          armTo(s, Math.sin(t * 13 + s) * 0.8, 1.2 + Math.sin(t * 14 + s) * 0.8);
-          legTo(s, Math.sin(t * 12 + (s > 0 ? 0 : Math.PI)) * 0.6, 0.1);
+          armTo(s, Math.sin(t * 19 + s) * 1.1, 1.4 + Math.sin(t * 21 + s * 2) * 1.0);
+          legTo(s, Math.sin(t * 17 + (s > 0 ? 0 : Math.PI)) * 0.9, 0.15 + Math.abs(Math.sin(t * 9 + s)) * 0.3);
         }
-        emOpen = 0.35 + Math.abs(Math.sin(t * 5)) * 0.25;   // a goofy grin, not a wail (wide open read as crying)
+        emOpen = 0.9 + Math.sin(t * 8) * 0.25; squint = 0.18; crying = true;
       }
       if (!roll) {
         rig.rotation.x = damp(rig.rotation.x, 0, 10, dt);
@@ -254,10 +275,14 @@ export function createOwl(): Owl {
       for (const tr of tears) {
         tr.m.visible = crying;
         if (!crying) continue;
-        const f = (t * 1.6 + tr.ph) % 1;
-        tr.m.position.set(tr.x + Math.sin(f * 6) * 0.01, tr.y - f * 0.4, 0.42 - f * 0.06);
-        tr.m.scale.setScalar(1 - f * 0.4);
+        // each drop shoots out sideways and arcs down, then starts again (a fountain, not a trickle)
+        const f = (t * 2.4 + tr.ph) % 1;
+        tr.m.position.set(tr.x + tr.dir * f * 0.75 * tr.spread, tr.y + f * 0.2 - f * f * 1.1, 0.42 + f * 0.12);
+        tr.m.scale.setScalar(1.3 - f * 0.6);
       }
+      const ps = damp(puddle.scale.x, crying ? 1 + Math.sin(t * 3) * 0.04 : 0.001, crying ? 0.6 : 3, dt);
+      puddle.scale.setScalar(ps);
+      puddle.visible = ps > 0.02;
 
       // mouth + tongue
       const open = emOpen ?? clamp(0.1 + walk * (0.25 + 0.22 * Math.sin(t * 13)) + scream * 1.0 + air * 0.75, 0, 1.15);
