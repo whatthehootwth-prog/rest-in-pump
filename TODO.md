@@ -91,4 +91,5 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 
 ## Your items
 
-- [ ]
+- [ ] Make it live, then adjust the grave / offering prices (`GRAVE_PRICE_USD`, `OFFERING_MIN_USD`)
+- [ ] Set up the Memorial NFTs: deploy the contract (testnet first, then memorial.whatthehoot.near) and set the minter key
