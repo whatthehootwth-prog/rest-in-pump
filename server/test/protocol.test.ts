@@ -49,7 +49,7 @@ describe('sanitizeChat', () => {
   it('cleans and limits chat text', () => {
     expect(sanitizeChat('  hello   world ')).toBe('hello world');
     expect(sanitizeChat('bye​!')).toBe('bye!');
-    expect(sanitizeChat('哈哈哈 😂')).toBe('哈哈哈 😂');
+    expect(sanitizeChat('héllo wörld 😂')).toBe('héllo wörld 😂');
     expect(sanitizeChat('   ')).toBeNull();
     expect(sanitizeChat('x'.repeat(141))).toBeNull();
     expect(sanitizeChat('x'.repeat(140))).toHaveLength(140);

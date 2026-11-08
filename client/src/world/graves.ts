@@ -48,7 +48,7 @@ export class GraveField {
       const bed = new THREE.Mesh(g.bed, this.mats.soil); bed.position.y = 0.03; bed.receiveShadow = true;
       const curb = new THREE.Mesh(g.curb, stone[1]); curb.castShadow = curb.receiveShadow = true;
       const mound = new THREE.Mesh(g.mound, this.mats.soilLight); mound.position.set(0, 0.04, 0.15); mound.receiveShadow = true;
-      const post = new THREE.Mesh(g.post, this.mats.wood); post.position.set(0.32, 0.34, -0.95); post.castShadow = true;
+      const post = new THREE.Mesh(g.post, this.mats.wood); post.position.set(0.32, 0.34, -0.99); post.castShadow = true;
       const sign = new THREE.Mesh(g.sign, signMat); sign.position.set(0.32, 0.6, -0.93); sign.rotation.z = -0.06;
       group.add(bed, curb, mound, post, sign);
       scene.add(group);

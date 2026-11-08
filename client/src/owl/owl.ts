@@ -212,14 +212,14 @@ export function createOwl(): Owl {
         body.rotation.x = damp(body.rotation.x, 0.12, k, dt);
         neck.rotation.x = Math.sin(b * 2) * 0.45;
         emOpen = 0.85;
-      } else if (em === 'pray') {                 // 拜拜: hands together, bowing over and over
+      } else if (em === 'pray') {                 // hands together, bowing over and over
         const bow = (1 - Math.cos((t * Math.PI * 2) / 1.8)) / 2;
         for (const s of [-1, 1]) { armTo(s, -1.35 + bow * 0.3, -0.6); legTo(s, 0, 0.04); }
         body.rotation.x = damp(body.rotation.x, bow * 0.7, k, dt);
         body.rotation.z = damp(body.rotation.z, 0, k, dt);
         neck.rotation.x = damp(neck.rotation.x, bow * 0.3, k, dt);
         emOpen = 0.05; squint = bow > 0.6 ? 0.1 : 1;
-      } else if (em === 'cry') {                  // 跪下哭: on its knees, sobbing into its hands, then wailing at the sky
+      } else if (em === 'cry') {                  // on its knees, sobbing into its hands, then wailing at the sky
         const cycle = t % 4.2, wail = cycle > 3.0;  // ~3 s sobbing, ~1.2 s arms up wailing
         const sob = Math.sin(t * 18) * 0.08;
         for (const s of [-1, 1]) {
@@ -232,7 +232,7 @@ export function createOwl(): Owl {
         body.rotation.z = damp(body.rotation.z, Math.sin(t * 9) * 0.04, k, dt);
         neck.rotation.x = damp(neck.rotation.x, wail ? -0.45 : 0.25 + Math.sin(t * 9) * 0.05, 8, dt);
         emOpen = wail ? 1.1 : 0.7 + Math.sin(t * 6) * 0.2; squint = 0.25; crying = true;
-      } else if (em === 'roll') {                 // 滚来滚去: lying down, rolling back and forth, flailing
+      } else if (em === 'roll') {                 // lying down, rolling back and forth, flailing
         roll = true;
         const r = Math.sin(t * 2.6);
         rig.rotation.x = damp(rig.rotation.x, -1.5, 8, dt);
@@ -243,7 +243,7 @@ export function createOwl(): Owl {
           armTo(s, Math.sin(t * 13 + s) * 0.8, 1.2 + Math.sin(t * 14 + s) * 0.8);
           legTo(s, Math.sin(t * 12 + (s > 0 ? 0 : Math.PI)) * 0.6, 0.1);
         }
-        emOpen = 1.05;
+        emOpen = 0.35 + Math.abs(Math.sin(t * 5)) * 0.25;   // a goofy grin, not a wail (wide open read as crying)
       }
       if (!roll) {
         rig.rotation.x = damp(rig.rotation.x, 0, 10, dt);

@@ -26,19 +26,15 @@ export class Landing {
     this.about.addEventListener('click', (e) => { if (e.target === this.about) this.about.close(); });
   }
 
+  /** The intro is already on screen from the HTML; this turns Enter on once the world is ready. */
   show(): void {
     this.root.hidden = false;
     document.body.classList.add('landing-open');
-    (document.getElementById('enter-btn') as HTMLButtonElement).focus();
+    const enter = document.getElementById('enter-btn') as HTMLButtonElement;
+    enter.disabled = false;
+    enter.focus();
     void this.refreshCount();
     this.pollTimer = window.setInterval(() => void this.refreshCount(), 10000);
-  }
-
-  /** Skip the intro (a refresh while already in the world resumes straight back in). */
-  skip(): void {
-    this.entered = true;
-    this.root.hidden = true;
-    document.body.classList.remove('landing-open');
   }
 
   private async refreshCount(): Promise<void> {

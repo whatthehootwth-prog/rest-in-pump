@@ -43,11 +43,7 @@ export class Hud {
     this.setStatus(this.status);
   }
 
-  // ------------------------------------------------------------------ loading / fatal
-  setLoading(text: string | null) {
-    if (text === null) { $('loading').classList.add('done'); return; }
-    $('loading-text').textContent = text;
-  }
+  // ------------------------------------------------------------------ fatal
   fatal(message: string) {
     const el = $('fatal');
     el.textContent = message;

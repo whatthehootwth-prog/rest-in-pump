@@ -36,13 +36,6 @@ kbd {
 .wordmark { font-weight: 800; letter-spacing: 0.14em; font-size: 13px; }
 .wordmark-lg { font-size: 22px; }
 
-/* ---------------------------------------------------------------- loading */
-.loading {
-  position: fixed; inset: 0; z-index: 20; display: grid; place-content: center; gap: 10px; text-align: center;
-  background: var(--bg); transition: opacity 0.4s ease;
-}
-.loading p { margin: 0; color: var(--muted); }
-.loading.done { opacity: 0; pointer-events: none; }
 
 /* ---------------------------------------------------------------- HUD */
 .hud-top {
@@ -51,7 +44,6 @@ kbd {
   pointer-events: none;
 }
 .hud-top > * { pointer-events: auto; }
-.loading-logo { display: block; margin: 0 auto 6px; width: 160px; height: 160px; }
 .hud-right { display: flex; gap: 8px; align-items: center; }
 .chip {
   display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px;
@@ -139,7 +131,7 @@ input[aria-invalid="true"] { border-color: var(--bad); }
   #online-text { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .loading { transition: none; }
+
 }
 
 /* ---------------------------------------------------------------- action bar (emotes + snapshot) */

@@ -57,11 +57,9 @@ async function main() {
   const chat = new ChatPanel((text) => conn?.send({ t: 'chat', text }) ?? false);
 
   // ---- build the world and the owl (heavy: give the loading text a chance to paint first)
-  hud.setLoading('Building the graveyard…');
   await nextFrame();
   const world = createWorld(renderer);
   world.setShadows(prefs.shadows());
-  hud.setLoading('Waking up the owls…');
   await nextFrame();
   getOwlTemplate();
   const owl = createOwl();
@@ -265,8 +263,6 @@ async function main() {
     else await offering.resume(p, redirectTx);
   };
   const landing = new Landing(enterWorld);
-  // a refresh while already in the world (session still alive) goes straight back in
-  const resuming = sessionState.token() !== null;
 
   // ---- render loop
   let last = performance.now(), t = 0;
@@ -294,8 +290,8 @@ async function main() {
   addEventListener('resize', () => { cam.resize(); fitCanvas(); });
   requestAnimationFrame(frame);
   await nextFrame();
-  hud.setLoading(null);
-  if (resuming) { landing.skip(); enterWorld(); } else landing.show();
+  // every page load starts at the intro (so "What is Rest In Pump?" is always reachable); Enter resumes the same player within the grace period
+  landing.show();
 
   if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__rip = { player, remotes, conn: c, owl, graves, cam };
 }
