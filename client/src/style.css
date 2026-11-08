@@ -361,3 +361,13 @@ button.pc-pill:hover:not(:disabled) .pc-action { filter: brightness(1.08); }
 .amount-row { margin-top: 14px; }
 #offer-body .items { margin-top: 14px; }
 .busy-line { display: flex; align-items: center; gap: 8px; }
+
+/* buyback rounds in the docs */
+.bb-live { margin-top: 6px; }
+.bb-round { margin: 10px 0; padding: 10px 12px; background: #1d1c23; border-radius: 8px; }
+.bb-head { font-size: 13px; color: var(--muted); }
+.bb-head b { color: var(--text); }
+.bb-round p { margin: 6px 0 0 !important; }
+.bb-round details { margin-top: 6px; font-size: 13px; }
+.bb-round summary { cursor: pointer; color: var(--focus); }
+.bb-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; font-size: 12px; }

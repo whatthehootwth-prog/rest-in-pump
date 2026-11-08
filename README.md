@@ -186,6 +186,35 @@ environment (never commit the key). On start the minter checks that the contract
 The build needs `--cfg near` (set in `contracts/memorial/.cargo/config.toml`); for a reproducible, verifiable
 build you can use `cargo near build` instead.
 
+## Buyback rounds (revenue -> $WTH holders)
+
+All grave and offering revenue (NEAR) goes to a dedicated buyback account. Every 10 minutes the server checks it;
+when the NEAR above a small reserve is worth `BUYBACK_THRESHOLD_USD` ($20), it runs a round (`server/src/buyback.ts`):
+
+1. `BUYBACK_TEAM_PERCENT` (20%) goes to `BUYBACK_TEAM_WALLET` (whatthehoot.near).
+2. The rest buys WTH on Ref Finance's WTH/NEAR DCL pool (`wrap.near|wth-0b2227.launchpad.justhoot.near|10000`):
+   wrap NEAR, then `ft_transfer_call` to `dclv2.ref-labs.near` with a `Swap` message and a 2% minimum-output limit.
+3. The WTH bought is sent to holders in proportion to their holdings, in batches of 35 `ft_transfer`s. Holder list:
+   FastNear's top holders. Left out: holders below `BUYBACK_MIN_HOLDING_WTH` (100,000), the Ref pools,
+   `intents.near`, the justhoot launchpad / router / token contracts, the buyback account and the team wallet,
+   plus anything in `BUYBACK_EXCLUDE`. (root.near is a holder and is included.)
+
+Safety: every step is recorded before it is sent. A definite failure is retried next time; an **unknown outcome**
+(e.g. an RPC timeout after sending) stops the round as `needs_check` and no new round starts until someone has
+looked (`SELECT * FROM buyback_rounds WHERE status = 'needs_check'`). If the holder list could be cut off above the
+minimum holding, the round stops instead of paying an incomplete list. Everything is public at `/api/buybacks`
+and in "What is Rest In Pump?" -> "How it helps $WTH".
+
+Set up (you):
+```bash
+# a separate account that only does buybacks (fund it with ~1 NEAR for gas + storage; that reserve is never spent)
+near account create-account fund-myself buyback.whatthehoot.near '1 NEAR' autogenerate-new-keypair print-to-terminal sign-as whatthehoot.near network-config mainnet sign-with-keychain send
+```
+Then set `TREASURY_ACCOUNT=buyback.whatthehoot.near`, `BUYBACK_ACCOUNT_ID=buyback.whatthehoot.near` and
+`BUYBACK_PRIVATE_KEY=ed25519:...` (the key printed above; it needs full access because it sends NEAR and tokens).
+Keep only revenue + the small reserve in this account. Sharing revenue with token holders can have legal
+consequences in some countries; get advice before announcing it.
+
 ## Known limits / risks
 
 - Player sessions are in memory: a server restart drops them (clients reconnect as new players). Graves, offerings,

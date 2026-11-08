@@ -35,6 +35,11 @@ export interface Config {
   minterPrivateKey: string | null;
   /** Public origin of the game, e.g. https://restinpump.com (the NFT contract's base_uri is <this>/nft). */
   publicBaseUrl: string | null;
+  /** Buyback: on only when the account and its key are set (the account must also be TREASURY_ACCOUNT). */
+  buyback: {
+    account: string; privateKey: string; teamWallet: string; thresholdUsd: number; teamPercent: number;
+    reserveNear: string; minHoldingWth: string; exclude: string[];
+  } | null;
 }
 
 function int(env: NodeJS.ProcessEnv, key: string, def: number, min: number, max: number): number {
@@ -92,5 +97,29 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     offeringMinUsd: usd('OFFERING_MIN_USD', '0.01'),
     holdMinutes: int(env, 'HOLD_MINUTES', 15, 1, 120),
     nftContract, minterAccountId, minterPrivateKey, publicBaseUrl,
+    buyback: buybackConfig(env),
+  };
+}
+
+function buybackConfig(env: NodeJS.ProcessEnv): Config['buyback'] {
+  const account = (env.BUYBACK_ACCOUNT_ID ?? '').trim(), privateKey = (env.BUYBACK_PRIVATE_KEY ?? '').trim();
+  if (!account && !privateKey) return null;
+  if (!account || !privateKey) throw new Error('Buyback needs BUYBACK_ACCOUNT_ID and BUYBACK_PRIVATE_KEY together (or neither)');
+  if (!/^ed25519:[1-9A-HJ-NP-Za-km-z]{40,100}$/.test(privateKey)) throw new Error('BUYBACK_PRIVATE_KEY must look like ed25519:<base58>');
+  const treasury = env.TREASURY_ACCOUNT ?? 'whatthehoot.near';
+  if (treasury !== account) throw new Error(`With buyback on, TREASURY_ACCOUNT must be the buyback account (${account}) so game revenue goes there`);
+  const num = (key: string, def: number, min: number, max: number) => {
+    const v = Number(env[key] ?? def);
+    if (!Number.isFinite(v) || v < min || v > max) throw new Error(`Invalid ${key}`);
+    return v;
+  };
+  return {
+    account, privateKey,
+    teamWallet: (env.BUYBACK_TEAM_WALLET ?? 'whatthehoot.near').trim(),
+    thresholdUsd: num('BUYBACK_THRESHOLD_USD', 20, 1, 1_000_000),
+    teamPercent: num('BUYBACK_TEAM_PERCENT', 20, 0, 100),
+    reserveNear: (env.BUYBACK_RESERVE_NEAR ?? '0.5').trim(),
+    minHoldingWth: (env.BUYBACK_MIN_HOLDING_WTH ?? '100000').trim(),
+    exclude: (env.BUYBACK_EXCLUDE ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   };
 }

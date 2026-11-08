@@ -1,3 +1,4 @@
+import { renderBuybacks } from './buybacks.ts';
 /**
  * The first scene: title, pitch, "Enter" and "What is Rest In Pump?". The 3D graveyard runs behind it.
  * Nothing joins the multiplayer world until the player presses Enter, so people reading this screen
@@ -42,6 +43,7 @@ export class Landing {
         if (panel) panel.hidden = !on;
       }
       if (main) main.scrollTop = 0;
+      if (tab.id === 'doc-tab-wth') { const el = document.getElementById('buyback-live'); if (el) void renderBuybacks(el); }
       tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       if (focus) tab.focus();
     };

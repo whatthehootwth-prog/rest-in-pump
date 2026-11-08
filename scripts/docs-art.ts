@@ -31,10 +31,10 @@ writeFileSync(`${out}/wth-flow.svg`, `<?xml version="1.0" encoding="UTF-8"?>
   ${box(20, 160, 'PLAYERS', 'pay in NEAR', '#f3efd8')}
   ${arrow(180, 290, 'NEAR')}
   ${box(290, 180, 'GRAVES +', 'OFFERINGS', '#bcd2ff')}
-  ${arrow(470, 570, 'revenue')}
-  ${box(570, 180, 'TREASURY', 'whatthehoot.near', '#e8c35a')}
+  ${arrow(470, 570, 'collects')}
+  ${box(570, 180, 'EVERY $20', '20% WTH wallet', '#e8c35a')}
   ${arrow(750, 800, '')}
-  ${box(800, 140, 'BUYBACK', '$WTH', '#7fd38b')}
+  ${box(800, 140, '80% BUYS', 'WTH holders', '#7fd38b')}
   <text x="480" y="225" text-anchor="middle" font-size="14" font-weight="700" fill="#9a97a3">PLACEHOLDER GRAPHIC</text>
 </svg>`);
 console.log('wrote', out);

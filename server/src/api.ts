@@ -18,12 +18,13 @@ import { NEAR_ACCOUNT_RE } from '../../shared/graves.ts';
  *   POST /api/payments/:id/confirm      { txHash, accountId } verify on NEAR, then create the grave / count the offering
  *   POST /api/payments/:id/cancel       release an unpaid hold
  *   GET  /api/balance?account=          the account's spendable NEAR (yoctoNEAR)
+ *   GET  /api/buybacks                  buyback settings, amount collected so far, past rounds with every payout
  */
 
 const MAX_BODY = 4096;
 const RATE = { perMin: 40, burst: 20 };
 
-export function createApi(graves: GraveService, log: Logger, clientIp: (req: http.IncomingMessage) => string, balanceOf: (account: string) => Promise<string | null>) {
+export function createApi(graves: GraveService, log: Logger, clientIp: (req: http.IncomingMessage) => string, balanceOf: (account: string) => Promise<string | null>, buybacks: () => unknown = () => ({ enabled: false, rounds: [] })) {
   const buckets = new Map<string, { tokens: number; at: number }>();
   const limited = (ip: string): boolean => {
     const now = Date.now();
@@ -60,6 +61,7 @@ export function createApi(graves: GraveService, log: Logger, clientIp: (req: htt
     try {
       if (req.method === 'GET' && url.pathname === '/api/config') { send(res, 200, await graves.config()); return true; }
       if (req.method === 'GET' && url.pathname === '/api/graves') { send(res, 200, graves.snapshot()); return true; }
+      if (req.method === 'GET' && url.pathname === '/api/buybacks') { send(res, 200, buybacks()); return true; }
       if (req.method === 'GET' && parts[1] === 'graves' && parts.length === 3) {
         const out = graves.detail(parts[2], url.searchParams.get('account'));
         if (isErr(out)) fail(res, out); else send(res, 200, out);

@@ -407,7 +407,7 @@ describe('database migration', () => {
         PRAGMA user_version = 1;`);
       v1.close();
       const v2 = openDb(file);
-      expect(v2.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 2 });
+      expect(v2.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 3 });
       expect(v2.prepare('SELECT plot, offering_count FROM graves').all()).toMatchObject([{ plot: 3, offering_count: 0 }]);
       expect(v2.prepare('PRAGMA foreign_keys').get()).toMatchObject({ foreign_keys: 1 });
       expect(v2.prepare("SELECT kind FROM payments WHERE id = 'p1'").get()).toMatchObject({ kind: 'grave' });

@@ -121,6 +121,34 @@ const MIGRATIONS: Migration[] = [
   );
   CREATE INDEX memorials_queue ON memorials(status, next_attempt_at);
   ` },
+
+  // 3: buyback rounds (revenue -> 20% WTH wallet, 80% buys WTH -> shared with holders) and their payouts
+  { sql: `
+  CREATE TABLE buyback_rounds (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    status      TEXT NOT NULL CHECK (status IN ('running','done','failed','needs_check')),
+    step        TEXT NOT NULL,
+    near_total  TEXT NOT NULL,
+    near_team   TEXT NOT NULL,
+    near_buy    TEXT NOT NULL,
+    near_usd    REAL NOT NULL,
+    team_tx     TEXT,
+    swap_tx     TEXT,
+    wth_bought  TEXT,
+    error       TEXT,
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL
+  );
+  CREATE TABLE buyback_payouts (
+    round_id    INTEGER NOT NULL REFERENCES buyback_rounds(id),
+    account     TEXT NOT NULL,
+    holding     TEXT NOT NULL,
+    amount      TEXT NOT NULL,
+    status      TEXT NOT NULL CHECK (status IN ('pending','sending','sent')),
+    tx          TEXT,
+    PRIMARY KEY (round_id, account)
+  );
+  ` },
 ];
 
 export function openDb(file: string): Db {

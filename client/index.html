@@ -96,14 +96,18 @@
         </section>
         <section class="doc-panel" role="tabpanel" id="doc-wth" aria-labelledby="doc-tab-wth" hidden>
       <h3>How Rest In Pump helps $WTH</h3>
-      <p>Graves and offerings are paid in <b>NEAR</b>, and the revenue goes back into <b>$WTH</b>, the What The Hoot token.</p>
-      <figure class="doc-fig"><img src="/docs/wth-flow.svg" alt="Players pay in NEAR, revenue goes to the treasury, the treasury buys back WTH" loading="lazy"><figcaption>Where the money goes</figcaption></figure>
+      <p>Graves and offerings are paid in <b>NEAR</b>. All of it goes into the game's buyback wallet, and every time <b>$20</b> has collected, a buyback round runs automatically:</p>
+      <figure class="doc-fig"><img src="/docs/wth-flow.svg" alt="Players pay in NEAR, revenue collects, 20 percent goes to the WTH wallet, 80 percent buys back WTH for holders" loading="lazy"><figcaption>Where the money goes</figcaption></figure>
       <ul class="about-list">
-        <li><b>Buyback:</b> revenue from graves and offerings is used to buy back $WTH.</li>
-        <li><b>Transparent:</b> all NEAR goes to the treasury wallet <a href="https://nearblocks.io/address/whatthehoot.near" target="_blank" rel="noopener noreferrer">whatthehoot.near</a>, which anyone can check on NearBlocks.</li>
+        <li><b>20%</b> goes to the WTH wallet, <a href="https://nearblocks.io/address/whatthehoot.near" target="_blank" rel="noopener noreferrer">whatthehoot.near</a>.</li>
+        <li><b>80%</b> buys <b>$WTH</b> on Ref Finance (the WTH/NEAR pool), with a 2% limit on how far the price may move.</li>
+        <li>The $WTH bought is <b>sent straight to WTH holders</b>, in proportion to how much each holds. Holders need at least <b>100,000 WTH</b>; pools, exchanges and the project's own wallets are left out.</li>
+        <li>Every round is public: the amounts, who received what, and every transaction, listed below.</li>
       </ul>
-      <p class="muted small">$WTH is a memecoin and can lose all its value.</p>
-        </section>
+      <h4>Buyback rounds</h4>
+      <div id="buyback-live" class="bb-live"></div>
+      <p class="muted small">$WTH is a memecoin and can lose all its value. Not financial advice.</p>
+    </section>
         <section class="doc-panel" role="tabpanel" id="doc-play" aria-labelledby="doc-tab-play" hidden>
       <h3>How to play</h3>
       <dl class="controls">

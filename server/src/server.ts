@@ -13,6 +13,8 @@ import { createApi } from './api.ts';
 import { MemorialMinter, nearMemorialChain, type MemorialChain } from './minter.ts';
 import { createNftRoutes } from './nft.ts';
 import { sillyName } from './names.ts';
+import { Buyback, nearBuybackChain, type BuybackChain } from './buyback.ts';
+import { parseUnits } from '../../shared/graves.ts';
 import { createNearRpc, fetchFtMetadata, nearBalance, verifyNearTransfer, type MetadataResult, type TransferCheck, type TransferResult } from './near.ts';
 import {
   MAX_CLIENT_MESSAGE_BYTES, PROTOCOL_VERSION, parseClientMessage, sanitizeChat,
@@ -43,6 +45,8 @@ export interface GameServer {
 export interface ServerOptions {
   near?: { lookup(contract: string): Promise<MetadataResult>; verify(c: TransferCheck): Promise<TransferResult> };
   db?: Db;
+  /** Replaces the buyback chain (turns buyback on with test settings). */
+  buybackChain?: BuybackChain;
   /** Replaces the live NEAR/USD price. */
   price?: NearPrice;
   /** Replaces the NEAR balance lookup. */
@@ -75,6 +79,7 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
   const db = opts.db ?? openDb(cfg.dbPath);
   const rpc = createNearRpc(cfg.nearRpcUrls);
   const mintingConfigured = !!(cfg.nftContract && cfg.minterAccountId && cfg.minterPrivateKey);
+  const priceSource = opts.price ?? createNearPrice(undefined, (err) => log.warn('NEAR price source failed', { err: String((err as Error)?.message ?? err) }));
   const broadcastAll = (msg: ServerMessage) => {
     const data = JSON.stringify(msg);
     for (const c of clients) if (c.playerId && c.ws.readyState === WebSocket.OPEN) c.ws.send(data);
@@ -82,7 +87,7 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
   const graves = new GraveService({
     db, log: log.child({ mod: 'graves' }), receiver: cfg.treasury,
     gravePriceUsd: cfg.gravePriceUsd, offeringMinUsd: cfg.offeringMinUsd,
-    price: opts.price ?? createNearPrice(undefined, (err) => log.warn('NEAR price source failed', { err: String((err as Error)?.message ?? err) })),
+    price: priceSource,
     holdMinutes: cfg.holdMinutes, nftContract: cfg.nftContract, mintingEnabled: mintingConfigured || !!opts.memorialChain,
     lookupNear: opts.near?.lookup ?? ((contract) => fetchFtMetadata(rpc, contract)),
     verify: opts.near?.verify ?? ((check) => verifyNearTransfer(rpc, check)),
@@ -100,10 +105,24 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
     : null;
   if (!minter) log.warn('Memorial NFT minting is off (set NFT_CONTRACT, MINTER_ACCOUNT_ID, MINTER_PRIVATE_KEY) — memorials queue until it is on');
   function kickMinter() { void minter?.run().catch((err) => log.error('memorial minting failed', { err })); }
+  // buyback rounds (off unless BUYBACK_ACCOUNT_ID / BUYBACK_PRIVATE_KEY are set)
+  const bbCfg = cfg.buyback ?? (opts.buybackChain ? {
+    account: 'buyback.test', privateKey: '', teamWallet: 'team.test', thresholdUsd: 20, teamPercent: 20, reserveNear: '0.5', minHoldingWth: '100000', exclude: [],
+  } : null);
+  const buyback = bbCfg ? new Buyback({
+    db, log: log.child({ mod: 'buyback' }), price: priceSource,
+    chain: opts.buybackChain ?? nearBuybackChain({ rpc, rpcUrls: cfg.nearRpcUrls, account: bbCfg.account, privateKey: bbCfg.privateKey }),
+    account: bbCfg.account, teamWallet: bbCfg.teamWallet, thresholdUsd: bbCfg.thresholdUsd, teamPercent: bbCfg.teamPercent,
+    reserve: parseUnits(bbCfg.reserveNear, 24), minHolding: parseUnits(bbCfg.minHoldingWth, 18), exclude: bbCfg.exclude,
+  }) : null;
+  const buybackInfo = () => ({
+    enabled: !!buyback, thresholdUsd: bbCfg?.thresholdUsd ?? null, teamPercent: bbCfg?.teamPercent ?? null, teamWallet: bbCfg?.teamWallet ?? null,
+    account: bbCfg?.account ?? null, minHoldingWth: bbCfg?.minHoldingWth ?? null, collected: buyback?.collected ?? null, rounds: buyback?.history() ?? [],
+  });
   const nft = createNftRoutes(graves, log.child({ mod: 'nft' }), cfg.publicBaseUrl, cfg.nftContract);
   const clientIp = (req: http.IncomingMessage) =>
     (cfg.trustProxy ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0]?.trim() : '') || req.socket.remoteAddress || '?';
-  const api = createApi(graves, log.child({ mod: 'api' }), clientIp, opts.balance ?? ((account) => nearBalance(rpc, account)));
+  const api = createApi(graves, log.child({ mod: 'api' }), clientIp, opts.balance ?? ((account) => nearBalance(rpc, account)), () => buybackInfo());
   const clients = new Set<Client>();
   const byPlayer = new Map<string, Client>();
   const dirtyRooms = new Set<string>();
@@ -318,6 +337,8 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
   }, 15000);
   void graves.sweep(Date.now()).catch((err) => log.error('payment sweep failed', { err }));
   const mintTimer = setInterval(kickMinter, 20000);
+  const buybackTimer = setInterval(() => void buyback?.run(), 10 * 60_000);
+  void buyback?.run();
   kickMinter();
 
   const heartbeat = setInterval(() => {
@@ -341,7 +362,7 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
     rooms,
     graves,
     close: () => new Promise<void>((resolve) => {
-      clearInterval(tick); clearInterval(sweeper); clearInterval(heartbeat); clearInterval(paymentSweep); clearInterval(mintTimer);
+      clearInterval(tick); clearInterval(sweeper); clearInterval(heartbeat); clearInterval(paymentSweep); clearInterval(mintTimer); clearInterval(buybackTimer);
       for (const c of clients) c.ws.close(1001, 'server shutting down');
       wss.close();
       httpServer.close(() => { if (!opts.db) db.close(); resolve(); });

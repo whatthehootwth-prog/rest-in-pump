@@ -16,18 +16,18 @@
   
   <path d="M470 125 H556" stroke="#f1c76b" stroke-width="6"/>
   <path d="M552 112 L570 125 L552 138 Z" fill="#f1c76b"/>
-  <text x="520" y="105" text-anchor="middle" font-size="14" font-weight="800" fill="#f1c76b">revenue</text>
+  <text x="520" y="105" text-anchor="middle" font-size="14" font-weight="800" fill="#f1c76b">collects</text>
   
   <rect x="570" y="70" width="180" height="110" rx="14" fill="#e8c35a" stroke="#1b1a1f" stroke-width="5"/>
-  <text x="660" y="118" text-anchor="middle" font-size="22" font-weight="900" fill="#1b1a1f">TREASURY</text>
-  <text x="660" y="148" text-anchor="middle" font-size="15" font-weight="700" fill="#1b1a1f" opacity=".75">whatthehoot.near</text>
+  <text x="660" y="118" text-anchor="middle" font-size="22" font-weight="900" fill="#1b1a1f">EVERY $20</text>
+  <text x="660" y="148" text-anchor="middle" font-size="15" font-weight="700" fill="#1b1a1f" opacity=".75">20% WTH wallet</text>
   
   <path d="M750 125 H786" stroke="#f1c76b" stroke-width="6"/>
   <path d="M782 112 L800 125 L782 138 Z" fill="#f1c76b"/>
   <text x="775" y="105" text-anchor="middle" font-size="14" font-weight="800" fill="#f1c76b"></text>
   
   <rect x="800" y="70" width="140" height="110" rx="14" fill="#7fd38b" stroke="#1b1a1f" stroke-width="5"/>
-  <text x="870" y="118" text-anchor="middle" font-size="22" font-weight="900" fill="#1b1a1f">BUYBACK</text>
-  <text x="870" y="148" text-anchor="middle" font-size="15" font-weight="700" fill="#1b1a1f" opacity=".75">$WTH</text>
+  <text x="870" y="118" text-anchor="middle" font-size="22" font-weight="900" fill="#1b1a1f">80% BUYS</text>
+  <text x="870" y="148" text-anchor="middle" font-size="15" font-weight="700" fill="#1b1a1f" opacity=".75">WTH holders</text>
   <text x="480" y="225" text-anchor="middle" font-size="14" font-weight="700" fill="#9a97a3">PLACEHOLDER GRAPHIC</text>
 </svg>
