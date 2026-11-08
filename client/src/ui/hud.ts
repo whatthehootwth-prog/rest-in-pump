@@ -1,6 +1,4 @@
-import { sanitizeName } from '../../../shared/protocol.ts';
 import type { NetStatus } from '../net/connection.ts';
-import { prefs } from '../util/storage.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => {
   const el = document.getElementById(id);
@@ -10,8 +8,6 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => {
 
 export interface HudActions {
   retry(): void;
-  rename(name: string): boolean;
-  setShadows(on: boolean): void;
 }
 
 /**
@@ -21,25 +17,12 @@ export interface HudActions {
 export class Hud {
   private readonly actions: HudActions;
   private status: NetStatus = { kind: 'connecting', attempt: 1, retrying: false };
-  private myName = '';
   private bannerTimer: number | null = null;
-  private namePending: number | null = null;
-  private readonly dialog = $<HTMLDialogElement>('settings');
 
   constructor(actions: HudActions) {
     this.actions = actions;
-    $('settings-btn').addEventListener('click', () => this.openSettings());
-    $('settings-close').addEventListener('click', () => this.dialog.close());
-    this.dialog.addEventListener('click', (e) => { if (e.target === this.dialog) this.dialog.close(); });
     $('net-retry').addEventListener('click', () => actions.retry());
     $('net-reload').addEventListener('click', () => location.reload());
-    $('name-form').addEventListener('submit', (e) => { e.preventDefault(); this.submitName(); });
-    $<HTMLInputElement>('name-input').addEventListener('input', () => this.validateNameField(false));
-
-    const shadows = $<HTMLInputElement>('opt-shadows');
-    shadows.checked = prefs.shadows();
-    shadows.addEventListener('change', () => actions.setShadows(shadows.checked));
-
     this.setStatus(this.status);
   }
 
@@ -78,90 +61,37 @@ export class Hud {
     switch (s.kind) {
       case 'connected':
         banner.hidden = true;
-        $('net-detail').textContent = s.rttMs === null ? 'connected' : `connected · ${s.rttMs} ms`;
         break;
       case 'connecting':
         banner.hidden = !s.retrying;   // the very first attempt is shown by the online chip only
         text.textContent = s.retrying ? 'Connection lost. Reconnecting…' : 'Connecting to the graveyard…';
         $('online-text').textContent = s.retrying ? 'Reconnecting…' : 'Connecting…';
-        $('net-detail').textContent = s.retrying ? `reconnecting (attempt ${s.attempt})` : 'connecting';
         break;
       case 'reconnecting':
         banner.hidden = false; retry.hidden = false;
         countdown('Connection lost. You are still in the world while we reconnect.', s.retryAt);
         $('online-text').textContent = 'Reconnecting…';
-        $('net-detail').textContent = `reconnecting (attempt ${s.attempt})`;
         break;
       case 'offline':
         banner.hidden = false; retry.hidden = false;
         countdown(navigator.onLine ? 'Can’t reach the game server.' : 'You appear to be offline.', s.retryAt);
         $('online-text').textContent = 'Offline';
-        $('net-detail').textContent = `offline (attempt ${s.attempt})`;
         break;
       case 'refused':
         banner.hidden = false; retry.hidden = false;
         countdown(s.message, s.retryAt);
         $('online-text').textContent = 'Not joined';
-        $('net-detail').textContent = `refused: ${s.code}`;
         break;
       case 'outdated':
         banner.hidden = false; reload.hidden = false;
         text.textContent = s.message;
         $('online-text').textContent = 'Update needed';
-        $('net-detail').textContent = 'outdated client';
         break;
     }
-    if (s.kind !== 'connected') { this.clearPending(); }
   }
 
   setOnline(total: number) {
     $('online-text').textContent = `${total} online`;
     $('online').title = `${total} ${total === 1 ? 'owl' : 'owls'} in the graveyard right now`;
-  }
-
-  setMyName(name: string) {
-    this.myName = name;
-    const input = $<HTMLInputElement>('name-input');
-    if (document.activeElement !== input) input.value = name;
-  }
-
-
-  // ------------------------------------------------------------------ settings: name
-  private validateNameField(showError: boolean): string | null {
-    const input = $<HTMLInputElement>('name-input'), msg = $('name-msg');
-    const name = sanitizeName(input.value);
-    const bad = !name && input.value.trim() !== '';
-    input.setAttribute('aria-invalid', String(bad && showError));
-    if (showError && !name) { msg.textContent = '2–16 letters, numbers, spaces, dots, dashes or underscores.'; msg.className = 'field-msg bad'; }
-    else if (!showError) { msg.textContent = ''; msg.className = 'field-msg'; }
-    return name;
-  }
-  private submitName() {
-    const name = this.validateNameField(true);
-    if (!name) return;
-    const msg = $('name-msg');
-    if (name === this.myName) { msg.textContent = 'That is already your name.'; msg.className = 'field-msg'; return; }
-    if (!this.actions.rename(name)) { msg.textContent = 'Not connected — try again once you are back online.'; msg.className = 'field-msg bad'; return; }
-    msg.textContent = 'Saving…'; msg.className = 'field-msg';
-    $<HTMLButtonElement>('name-save').disabled = true;
-    this.namePending = window.setTimeout(() => this.nameResult(false, 'No answer from the server. Try again.'), 6000);
-  }
-  /** Called when the server confirms our rename (or rejects it). */
-  nameResult(ok: boolean, text: string) {
-    if (this.namePending !== null) { clearTimeout(this.namePending); this.namePending = null; }
-    $<HTMLButtonElement>('name-save').disabled = false;
-    const msg = $('name-msg');
-    msg.textContent = text;
-    msg.className = 'field-msg ' + (ok ? 'ok' : 'bad');
-  }
-
-  private clearPending() {
-    if (this.namePending !== null) this.nameResult(false, 'Connection lost before the name was saved.');
-  }
-
-  openSettings() {
-    $('name-msg').textContent = '';
-    $<HTMLInputElement>('name-input').value = this.myName;
-    this.dialog.showModal();
   }
 }

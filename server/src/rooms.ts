@@ -137,13 +137,6 @@ export class RoomManager {
     return { ok: true, from, to: target };
   }
 
-  rename(id: string, name: string): Player | null {
-    const p = this.byId.get(id);
-    if (!p) return null;
-    p.name = name;
-    return p;
-  }
-
   /**
    * Accepts a state update from a client after clamping it to what is physically possible:
    * inside the world, no faster than the run speed (plus slack for network jitter), sane hop height.

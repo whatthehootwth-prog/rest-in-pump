@@ -3,7 +3,7 @@
  * break the game — values just won't persist.
  *
  * sessionStorage (per tab): the reconnect session token, so a refresh resumes you.
- * localStorage (per browser): display name and graphics preferences.
+ * localStorage (per browser): sound settings (see audio/audio.ts) and the open payment id.
  */
 function get(store: () => Storage, key: string): string | null {
   try { return store().getItem(key); } catch { return null; }
@@ -13,13 +13,6 @@ function set(store: () => Storage, key: string, value: string | null): void {
 }
 const local = () => window.localStorage;
 const session = () => window.sessionStorage;
-
-export const prefs = {
-  name: () => get(local, 'rip.name'),
-  setName: (v: string) => set(local, 'rip.name', v),
-  shadows: () => get(local, 'rip.shadows') !== '0',
-  setShadows: (on: boolean) => set(local, 'rip.shadows', on ? '1' : '0'),
-};
 
 export const sessionState = {
   token: () => get(session, 'rip.session'),

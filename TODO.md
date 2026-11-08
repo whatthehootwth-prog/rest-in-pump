@@ -9,7 +9,7 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 - [x] Each player gets a random weird walk on join (9 styles, server-assigned, cannot be changed)
 - [x] Emote bar: Dance, Club, Pray (hands together, bowing), Cry (kneels and cries), Roll (rolls around on the ground) — synced to everyone; keys 1–5
 - [x] Snapshot button (P) saves a PNG of the scene
-- [x] Music + sound effects, synthesized in the browser (no audio files): sad graveyard theme, weird dance / club tracks while you dance or club, cartoon crying (harder when rolling), hop, offerings, new graves, level-ups, chat, snapshot; mute button + M, Music / Sound effects toggles in Settings
+- [x] Music + sound effects: organ theme, dance and club tracks while you dance or club, sampled crying (harder when rolling), synthesized hop / offerings / new graves / level-ups / chat / snapshot; mute button + M
 - [x] Chat (bottom left): server-relayed, validated, rate-limited, speech bubbles above heads
 - [x] Fixed low render resolution (no resolution setting)
 - [x] Intro scene: pitch, Enter the Meme Graveyard, What is Rest In Pump? explainer, real player count; joining happens only on Enter
@@ -19,7 +19,8 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 - [x] Disconnect handling, 20 s resume window, refresh resumes the same player
 - [x] Reconnect with backoff and clear status banner (reconnecting / offline / full / outdated)
 - [x] Server checks: speed/teleport limits, world bounds, rate limits, origin allow-list, heartbeats
-- [x] Minimal HUD: real online count, name change, shadows toggle (no top-left panel)
+- [x] Minimal HUD: real online count, wallet, mute (no settings page, no top-left panel)
+- [x] Random silly names for every player, given by the server (unique, not changeable)
 - [x] Automated tests (63): protocol, rooms, chat, graves, offerings, minting, NFT artwork + metadata, migration, NEAR verification, HTTP + WebSocket integration, compiled NFT contract
 - [x] Project logo (favicon, loading screen, HUD)
 - [x] Local git repo, author `wth <whatthehootwth@gmail.com>`

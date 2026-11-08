@@ -72,7 +72,7 @@ client/                Vite app
   src/net/             connection state machine, remote players + interpolation, grave API client
   src/audio/           music + sound effects, synthesized with Web Audio (no audio files)
   src/wallet/          NEAR wallet selector (loaded only when needed)
-  src/ui/              HUD, intro, chat, plot card, create-grave + offering dialogs (shared pay flow), settings, name tags
+  src/ui/              HUD, intro, chat, plot card, create-grave + offering dialogs (shared flow), name tags
 brand/                 original logo artwork (client/public has the cropped icon sizes)
 prototype/             the original single-file prototype (reference only)
 TODO.md                roadmap checklist
@@ -89,7 +89,7 @@ TODO.md                roadmap checklist
   several instances if `MAX_ROOMS` is raised, but the game UI has no room picker.
 - A dropped player keeps their slot, id and name for `RECONNECT_GRACE_MS`. The session token lives in
   `sessionStorage`, so a refresh or network blip resumes the same player; a duplicated tab gets a new one.
-- Every player gets a random walk style from the server on join; the server ignores any other value.
+- Every player gets a random silly name and a random walk style from the server on join; neither can be changed.
 - Emotes (dance, club, pray, cry, roll) are part of the synced player state.
 - Chat is relayed by the server to the room: cleaned (no control/zero-width characters), max 140 chars,
   rate-limited (burst of 3, then one per 1.5 s). There is no chat history or moderation yet.
@@ -196,6 +196,6 @@ build you can use `cargo near build` instead.
 - One server process. Horizontal scaling would need sticky sessions or a shared room service.
 - Movement is client-predicted; the server limits speed and bounds but does not check collisions with
   gravestones, so a modified client can walk through scenery (not through the world edge).
-- No accounts yet: names are display names, not identities, and are not unique or moderated beyond a
-  character allow-list.
+- No accounts: every player gets a random silly name from the server on join (unique among players online,
+  not changeable). Names are not identities.
 - The JS bundle is ~620 KB (170 KB gzipped), mostly three.js.

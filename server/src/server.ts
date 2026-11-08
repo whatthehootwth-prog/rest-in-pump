@@ -11,9 +11,10 @@ import { GraveService, parsePrice } from './graves.ts';
 import { createApi } from './api.ts';
 import { MemorialMinter, nearMemorialChain, type MemorialChain } from './minter.ts';
 import { createNftRoutes } from './nft.ts';
+import { sillyName } from './names.ts';
 import { createNearRpc, fetchFtMetadata, verifyFtTransfer, viewFunction, type MetadataResult, type TransferCheck, type TransferResult } from './near.ts';
 import {
-  MAX_CLIENT_MESSAGE_BYTES, PROTOCOL_VERSION, parseClientMessage, sanitizeChat, sanitizeName,
+  MAX_CLIENT_MESSAGE_BYTES, PROTOCOL_VERSION, parseClientMessage, sanitizeChat,
   type ClientMessage, type ErrorCode, type ServerMessage, type SnapshotEntry,
 } from '../../shared/protocol.ts';
 
@@ -59,7 +60,6 @@ const ERROR_TEXT: Record<ErrorCode, string> = {
   room_full: 'That graveyard is full.',
   server_full: 'The graveyard is full right now.',
   unknown_room: 'That graveyard does not exist.',
-  bad_name: 'Names must be 2-16 letters, numbers, spaces, dots, dashes or underscores.',
   rate_limited: 'Slow down — too many messages.',
   bad_chat: 'Chat messages must be 1-140 characters.',
   chat_too_fast: 'You are chatting too fast. Wait a moment.',
@@ -143,7 +143,8 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
         broadcastRoom(resumed.roomId, { t: 'presence', id: resumed.id, connected: true }, resumed.id);
         log.info('player resumed', { conn: c.connId, player: resumed.id, room: resumed.roomId });
       } else {
-        const name = sanitizeName(msg.name) ?? `Owl-${randomBytes(2).toString('hex').toUpperCase()}`;
+        // every player gets a random silly name from the server (the hello's name is ignored)
+        const name = sillyName(new Set(rooms.summaries().flatMap((r) => rooms.playersIn(r.id).map((q) => q.name))));
         const res = rooms.join(name, msg.room, now);
         if (!res.ok && msg.room && (res.code === 'room_full' || res.code === 'unknown_room')) {
           // their remembered room is gone or full: put them anywhere rather than refusing entry
@@ -166,14 +167,6 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
       case 'state':
         if (rooms.applyState(p.id, msg.s, now)) dirtyRooms.add(p.roomId);
         return;
-      case 'rename': {
-        const name = sanitizeName(msg.name);
-        if (!name) return sendError(c, 'bad_name');
-        rooms.rename(p.id, name);
-        broadcastRoom(p.roomId, { t: 'renamed', id: p.id, name });
-        log.info('player renamed', { player: p.id, name });
-        return;
-      }
       case 'chat': {
         const text = sanitizeChat(msg.text);
         if (!text) return sendError(c, 'bad_chat');

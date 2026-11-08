@@ -82,10 +82,6 @@ export class RemotePlayers {
 
   say(id: string, text: string): void { this.players.get(id)?.tag.say(text); }
 
-  rename(id: string, name: string): void {
-    const r = this.players.get(id);
-    if (r) { r.name = name; r.tag.setName(name); }
-  }
 
   applySnapshot(ts: number, entries: SnapshotEntry[]): void {
     const now = performance.now();

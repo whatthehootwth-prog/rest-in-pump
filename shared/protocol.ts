@@ -9,7 +9,7 @@
 
 import type { GraveInfo } from './graves.ts';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Players are kept inside this circle around the world origin (metres). */
 export const WORLD_RADIUS = 33;
@@ -72,7 +72,6 @@ export type ErrorCode =
   | 'room_full'
   | 'server_full'
   | 'unknown_room'
-  | 'bad_name'
   | 'rate_limited'
   | 'bad_chat'
   | 'chat_too_fast';
@@ -82,7 +81,6 @@ export type ErrorCode =
 export type ClientMessage =
   | { t: 'hello'; v: number; name: string | null; resume: string | null; room: string | null }
   | { t: 'state'; s: PlayerState }
-  | { t: 'rename'; name: string }
   | { t: 'join_room'; room: string }
   | { t: 'list_rooms' }
   | { t: 'chat'; text: string }
@@ -106,7 +104,6 @@ export type ServerMessage =
   | { t: 'player_joined'; p: PlayerInfo }
   | { t: 'player_left'; id: string }
   | { t: 'presence'; id: string; connected: boolean }
-  | { t: 'renamed'; id: string; name: string }
   | { t: 'snapshot'; ts: number; s: SnapshotEntry[] }
   | { t: 'online'; total: number; room: number }
   | { t: 'rooms'; rooms: RoomSummary[] }
@@ -188,8 +185,6 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       const s = parseState(v.s);
       return s ? { t: 'state', s } : null;
     }
-    case 'rename':
-      return typeof v.name === 'string' && v.name.length <= 64 ? { t: 'rename', name: v.name } : null;
     case 'join_room':
       return typeof v.room === 'string' && v.room.length <= 32 ? { t: 'join_room', room: v.room } : null;
     case 'list_rooms':

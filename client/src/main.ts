@@ -23,7 +23,7 @@ import { itemName, levelName } from '../../shared/graves.ts';
 import { Wallet } from './wallet/wallet.ts';
 import { api, ApiError } from './net/api.ts';
 import { shortAccount } from './ui/dom.ts';
-import { prefs, sessionState } from './util/storage.ts';
+import { sessionState } from './util/storage.ts';
 
 /** Yields so the loading text can paint. Background tabs get no animation frames, so don't wait for one there. */
 const nextFrame = () => new Promise<void>((r) => (document.hidden ? setTimeout(r, 0) : requestAnimationFrame(() => setTimeout(r, 0))));
@@ -44,7 +44,7 @@ async function main() {
   // fixed low resolution (1 render pixel per CSS pixel): keeps the game smooth on every machine
   const fitCanvas = () => { renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight, false); };
   fitCanvas();
-  renderer.shadowMap.enabled = prefs.shadows();
+  renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.15;
@@ -52,17 +52,13 @@ async function main() {
   const input = new Input();
   input.enabled = false;   // until the player enters from the intro screen
   let conn: Connection | null = null;
-  const hud = new Hud({
-    retry: () => conn?.retryNow(),
-    rename: (name) => conn?.send({ t: 'rename', name }) ?? false,
-    setShadows: (on) => { prefs.setShadows(on); world.setShadows(on); },
-  });
+  const hud = new Hud({ retry: () => conn?.retryNow() });
   const chat = new ChatPanel((text) => conn?.send({ t: 'chat', text }) ?? false);
 
   // ---- build the world and the owl (heavy: give the loading text a chance to paint first)
   await nextFrame();
   const world = createWorld(renderer);
-  world.setShadows(prefs.shadows());
+  world.setShadows(true);
   await nextFrame();
   getOwlTemplate();
   const owl = createOwl();
@@ -110,19 +106,14 @@ async function main() {
   // ---- sound (starts on Enter: browsers only allow audio after a click)
   const audio = new GameAudio();
   const soundBtn = document.getElementById('sound-btn') as HTMLButtonElement;
-  const optMusic = document.getElementById('opt-music') as HTMLInputElement;
-  const optSfx = document.getElementById('opt-sfx') as HTMLInputElement;
   const syncSound = () => {
     soundBtn.setAttribute('aria-pressed', String(audio.muted));
     soundBtn.setAttribute('aria-label', audio.muted ? 'Unmute sound' : 'Mute sound');
-    optMusic.checked = audio.musicOn; optSfx.checked = audio.sfxOn;
   };
   audio.onChange(syncSound); syncSound();
   soundBtn.addEventListener('click', () => { audio.start(); audio.toggleMuted(); soundBtn.blur(); });
-  optMusic.addEventListener('change', () => { audio.start(); audio.setMusic(optMusic.checked); });
-  optSfx.addEventListener('change', () => { audio.start(); audio.setSfx(optSfx.checked); });
   input.onPress('KeyM', () => { audio.start(); audio.toggleMuted(); });
-  for (const id of ['grave-dlg', 'offer-dlg', 'about', 'settings']) {
+  for (const id of ['grave-dlg', 'offer-dlg', 'about']) {
     const d = document.getElementById(id);
     d?.addEventListener('toggle', () => { if ((d as HTMLDialogElement).open) audio.click(); });
   }
@@ -162,7 +153,8 @@ async function main() {
   let selfId: string | null = null;
   let myName = '';
   let joinedOnce = false;
-  conn = new Connection(() => ({ name: prefs.name(), resume: sessionState.token(), room: null }));
+  // names are random and given by the server, so the hello carries none
+  conn = new Connection(() => ({ name: null, resume: sessionState.token(), room: null }));
   const c = conn;
   c.onStatus((s) => {
     hud.setStatus(s);
@@ -179,7 +171,6 @@ async function main() {
         const self = m.players.find((p) => p.id === m.you);
         if (self) {
           myName = self.name;
-          hud.setMyName(self.name);
           selfTag.setName(self.name);
           selfTag.sprite.visible = true;
           owl.setWalk(self.state.walk);   // the server picks our walk style; it never changes
@@ -206,15 +197,6 @@ async function main() {
         break;
       }
       case 'presence': remotes.setConnected(m.id, m.connected); break;
-      case 'renamed':
-        if (m.id === selfId) {
-          myName = m.name; prefs.setName(m.name); hud.setMyName(m.name); selfTag.setName(m.name); hud.nameResult(true, 'Saved.');
-        } else {
-          const old = remotes.name(m.id);
-          remotes.rename(m.id, m.name);
-          if (old) chat.system(`${old} is now ${m.name}.`);
-        }
-        break;
       case 'chat':
         if (m.id !== selfId) audio.chatPop();
         if (m.id === selfId) { selfTag.say(m.text); chat.message(m.name, m.text, true); }
@@ -238,8 +220,7 @@ async function main() {
       case 'rooms': break;
       case 'error':
         if (m.fatal) break;   // the connection handles fatal errors
-        if (m.code === 'bad_name') hud.nameResult(false, m.message);
-        else if (m.code === 'bad_chat' || m.code === 'chat_too_fast') chat.error(m.message);
+        if (m.code === 'bad_chat' || m.code === 'chat_too_fast') chat.error(m.message);
         else console.warn('[server]', m.code, m.message);
         break;
       case 'pong': break;

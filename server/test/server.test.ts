@@ -64,12 +64,13 @@ describe('game server', () => {
   it('two players see each other join and move', async () => {
     const port = await boot();
     const a = client(port), b = client(port);
-    const wa = await a.hello({ name: 'Alice' });
-    expect(wa.players.map((p) => p.name)).toEqual(['Alice']);
-    const wb = await b.hello({ name: 'Bob' });
-    expect(wb.players.map((p) => p.name).sort()).toEqual(['Alice', 'Bob']);
+    const wa = await a.hello();
+    const aName = wa.players[0].name;
+    const wb = await b.hello();
+    const bName = wb.players.find((p) => p.id === wb.you)!.name;
+    expect(wb.players.map((p) => p.name).sort()).toEqual([aName, bName].sort());
     const joined = await a.next('player_joined');
-    expect(joined.p).toMatchObject({ id: wb.you, name: 'Bob', connected: true });
+    expect(joined.p).toMatchObject({ id: wb.you, name: bName, connected: true });
     await a.next('online', (m) => m.total === 2);
 
     const me = wb.players.find((p) => p.id === wb.you)!.state;
@@ -151,24 +152,30 @@ describe('game server', () => {
     await expect(evil.open()).rejects.toThrow();
   });
 
-  it('renames with validation', async () => {
+  it('gives every player a unique random silly name and ignores the requested one', async () => {
     const port = await boot();
     const a = client(port), b = client(port);
-    await a.hello({ name: 'Alice' });
-    const wb = await b.hello({ name: 'Bob' });
-    b.send({ t: 'rename', name: '<b>' });
-    expect(await b.next('error')).toMatchObject({ code: 'bad_name' });
+    const wa = await a.hello({ name: 'Alice' });
+    const wb = await b.hello({ name: 'Alice' });
+    const names = wb.players.map((p) => p.name);
+    expect(names).not.toContain('Alice');
+    expect(new Set(names).size).toBe(2);
+    for (const n of names) expect(n).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
+    expect(wa.players[0].name.length).toBeLessThanOrEqual(16);
+    // renaming is not part of the protocol any more: treated as a malformed message, nothing changes
     b.send({ t: 'rename', name: 'Bobby' });
-    expect(await a.next('renamed')).toEqual({ t: 'renamed', id: wb.you, name: 'Bobby' });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(a.msgs.some((m) => (m as { t: string }).t === 'renamed')).toBe(false);
   });
 
   it('relays chat to everyone in the room, with validation and a rate limit', async () => {
     const port = await boot();
     const a = client(port), b = client(port);
-    await a.hello({ name: 'Alice' });
-    const wb = await b.hello({ name: 'Bob' });
+    await a.hello();
+    const wb = await b.hello();
+    const bName = wb.players.find((p) => p.id === wb.you)!.name;
     b.send({ t: 'chat', text: '  boo!  ' });
-    expect(await a.next('chat')).toMatchObject({ id: wb.you, name: 'Bob', text: 'boo!' });
+    expect(await a.next('chat')).toMatchObject({ id: wb.you, name: bName, text: 'boo!' });
     expect(await b.next('chat')).toMatchObject({ text: 'boo!' });
     b.send({ t: 'chat', text: '   ' });
     expect(await b.next('error')).toMatchObject({ code: 'bad_chat' });
