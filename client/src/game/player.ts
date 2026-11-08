@@ -38,6 +38,9 @@ export class LocalPlayer {
     this.yaw = s.yaw;
   }
 
+  /** True while standing on the ground (false mid-hop). */
+  get onGround(): boolean { return this.grounded; }
+
   /** Starts an emote, or stops it if it is already playing. */
   toggleEmote(i: number): void { this.emote = this.emote === i ? 0 : i; }
 

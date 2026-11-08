@@ -70,6 +70,7 @@ client/                Vite app
   src/owl/             owl model (built once, shared) + animation / weird walks
   src/game/            local player, input, camera
   src/net/             connection state machine, remote players + interpolation, grave API client
+  src/audio/           music + sound effects, synthesized with Web Audio (no audio files)
   src/wallet/          NEAR wallet selector (loaded only when needed)
   src/ui/              HUD, intro, chat, plot card, create-grave + offering dialogs (shared pay flow), settings, name tags
 brand/                 original logo artwork (client/public has the cropped icon sizes)

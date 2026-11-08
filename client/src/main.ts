@@ -18,6 +18,7 @@ import { PlotCard } from './ui/plotcard.ts';
 import { CreateGraveDialog } from './ui/creategrave.ts';
 import { OfferingDialog } from './ui/offering.ts';
 import { pendingPayment } from './ui/payflow.ts';
+import { GameAudio } from './audio/audio.ts';
 import { itemName, levelName } from '../../shared/graves.ts';
 import { Wallet } from './wallet/wallet.ts';
 import { api, ApiError } from './net/api.ts';
@@ -106,6 +107,26 @@ async function main() {
   const remotes = new RemotePlayers(world.scene);
   input.bindTouchButtons(document);
 
+  // ---- sound (starts on Enter: browsers only allow audio after a click)
+  const audio = new GameAudio();
+  const soundBtn = document.getElementById('sound-btn') as HTMLButtonElement;
+  const optMusic = document.getElementById('opt-music') as HTMLInputElement;
+  const optSfx = document.getElementById('opt-sfx') as HTMLInputElement;
+  const syncSound = () => {
+    soundBtn.setAttribute('aria-pressed', String(audio.muted));
+    soundBtn.setAttribute('aria-label', audio.muted ? 'Unmute sound' : 'Mute sound');
+    optMusic.checked = audio.musicOn; optSfx.checked = audio.sfxOn;
+  };
+  audio.onChange(syncSound); syncSound();
+  soundBtn.addEventListener('click', () => { audio.start(); audio.toggleMuted(); soundBtn.blur(); });
+  optMusic.addEventListener('change', () => { audio.start(); audio.setMusic(optMusic.checked); });
+  optSfx.addEventListener('change', () => { audio.start(); audio.setSfx(optSfx.checked); });
+  input.onPress('KeyM', () => { audio.start(); audio.toggleMuted(); });
+  for (const id of ['grave-dlg', 'offer-dlg', 'about', 'settings']) {
+    const d = document.getElementById(id);
+    d?.addEventListener('toggle', () => { if ((d as HTMLDialogElement).open) audio.click(); });
+  }
+
   // ---- emotes (buttons + keys 1-5) and snapshot (button + P)
   const emoteButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-emote]')];
   for (const b of emoteButtons) b.addEventListener('click', () => { player.toggleEmote(Number(b.dataset.emote)); b.blur(); });
@@ -114,6 +135,7 @@ async function main() {
   const syncEmoteButtons = () => {
     if (player.emote === shownEmote) return;
     shownEmote = player.emote;
+    audio.setEmote(player.emote);
     for (const b of emoteButtons) b.setAttribute('aria-pressed', String(Number(b.dataset.emote) === player.emote));
   };
   const snapshot = () => {
@@ -128,6 +150,7 @@ async function main() {
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       hud.toast('Snapshot saved.');
+      audio.shutter();
     }, 'image/png');
   };
   document.getElementById('snap-btn')!.addEventListener('click', (e) => { snapshot(); (e.currentTarget as HTMLElement).blur(); });
@@ -193,14 +216,17 @@ async function main() {
         }
         break;
       case 'chat':
+        if (m.id !== selfId) audio.chatPop();
         if (m.id === selfId) { selfTag.say(m.text); chat.message(m.name, m.text, true); }
         else { remotes.say(m.id, m.text); chat.message(m.name, m.text, false); }
         break;
       case 'grave_added':
+        audio.graveCreated();
         graves.addGrave(m.grave);
         chat.system(`${shortAccount(m.grave.creator)} created a grave for $${m.grave.meme.symbol} at plot #${m.grave.plot}.`);
         break;
       case 'grave_updated':
+        if (m.offering.levelUp) audio.levelUp(); else audio.offering();
         graves.addGrave(m.grave);
         offering.graveUpdated(m.grave);
         chat.system(`${shortAccount(m.offering.payer)} left ${itemName(m.offering.item).toLowerCase()} at $${m.grave.meme.symbol}.`);
@@ -235,6 +261,7 @@ async function main() {
   let entered = false;
   const enterWorld = () => {
     entered = true;
+    audio.start();
     input.enabled = true;
     cam.follow();
     canvas.focus();
@@ -272,7 +299,9 @@ async function main() {
     const now = performance.now();
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now; t += dt;
+    const wasGrounded = player.onGround;
     player.update(dt, t, input, cam.yaw, world.colliders);   // input is ignored until entered
+    if (wasGrounded && !player.onGround) audio.hop();
     syncEmoteButtons();
     selfTag.sprite.position.set(player.pos.x, player.height + 1.0, player.pos.z);
     selfTag.tick(now);

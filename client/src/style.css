@@ -270,6 +270,11 @@ body.landing-open #net-banner { display: none !important; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 body.landing-open .wallet-wrap { display: none; }
 
+#sound-btn .snd-x { display: none; }
+#sound-btn[aria-pressed="true"] .snd-wave { display: none; }
+#sound-btn[aria-pressed="true"] .snd-x { display: inline; }
+body.landing-open #sound-btn { display: none; }
+
 /* ---------------------------------------------------------------- plot prompt (walk up to a plot) */
 .plot-card { position: fixed; left: 50%; transform: translateX(-50%); bottom: 92px; z-index: 3; max-width: calc(100vw - 32px); }
 body.landing-open .plot-card { display: none !important; }

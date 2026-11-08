@@ -114,6 +114,7 @@
         <dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Dance, club, pray, cry, roll</dd>
         <dt><kbd>E</kbd></dt><dd>Create a grave / leave an offering</dd>
         <dt><kbd>P</kbd></dt><dd>Save a snapshot</dd>
+        <dt><kbd>M</kbd></dt><dd>Mute / unmute sound</dd>
         <dt><kbd>Enter</kbd></dt><dd>Chat</dd>
         <dt>Drag</dt><dd>Turn the camera</dd>
       </dl>
@@ -149,6 +150,7 @@
           <button id="wallet-disconnect" class="btn btn-small btn-quiet" type="button">Disconnect</button>
         </div>
       </div>
+      <button id="sound-btn" class="icon-btn" type="button" aria-label="Mute sound" aria-pressed="false" title="Sound (M)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h3l5-4v14l-5-4H4z" fill="currentColor" stroke="none"/><path class="snd-wave" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/><path class="snd-x" d="M16 9l5 6M21 9l-5 6"/></svg></button>
       <button id="settings-btn" class="icon-btn" type="button" aria-label="Settings" title="Settings">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6a.5.5 0 0 0 .1-.6l-1.9-3.3a.5.5 0 0 0-.6-.2l-2.4 1a7.4 7.4 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.4h-3.8a.5.5 0 0 0-.5.4l-.4 2.6c-.6.3-1.2.6-1.7 1l-2.4-1a.5.5 0 0 0-.6.2L2.5 8.8a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.6a.5.5 0 0 0-.1.6l1.9 3.3c.1.2.4.3.6.2l2.4-1c.5.4 1.1.7 1.7 1l.4 2.6c0 .2.3.4.5.4h3.8c.2 0 .5-.2.5-.4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.4 1c.2.1.5 0 .6-.2l1.9-3.3a.5.5 0 0 0-.1-.6L19.4 13ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>
       </button>
@@ -210,6 +212,13 @@
     <section>
       <h3>Graphics</h3>
       <label class="check"><input id="opt-shadows" type="checkbox"> Shadows</label>
+    </section>
+
+    <section>
+      <h3>Sound</h3>
+      <label class="check"><input id="opt-music" type="checkbox"> Music</label>
+      <label class="check"><input id="opt-sfx" type="checkbox"> Sound effects</label>
+      <p class="small muted">Press <kbd>M</kbd> to mute everything.</p>
     </section>
 
     <section>
