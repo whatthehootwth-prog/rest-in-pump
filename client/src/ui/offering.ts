@@ -4,7 +4,7 @@ import {
 } from '../../../shared/graves.ts';
 import { api } from '../net/api.ts';
 import type { Wallet } from '../wallet/wallet.ts';
-import { h, shortAccount } from './dom.ts';
+import { h } from './dom.ts';
 import { PayFlow } from './payflow.ts';
 import { memeChip } from './creategrave.ts';
 
@@ -13,7 +13,7 @@ const MINT_POLL_FOR_MS = 3 * 60_000;
 const QUICK_AMOUNTS = ['10000', '25000', '100000'];
 
 /**
- * "Leave an offering": pick an item + a WTH amount (at least the minimum) → pay → the grave's community count
+ * "Leave an offering": pick an item + a WTH amount (at least the minimum) → send it → the grave's community count
  * goes up by one. A wallet's first offering to a grave earns that grave's Memorial NFT, minted on NEAR.
  */
 export class OfferingDialog {
@@ -26,7 +26,6 @@ export class OfferingDialog {
   private grave: GraveInfo | null = null;
   private detail: GraveDetail | null = null;
   private detailFor = '';
-  private step: 'choose' | 'pay' = 'choose';
   private item: OfferingItem = 'candle';
   private amount = '';
   private amountError: string | null = null;
@@ -47,10 +46,8 @@ export class OfferingDialog {
   async open(grave: GraveInfo): Promise<void> {
     if (this.grave?.id !== grave.id || !this.flow.open) {
       this.flow.reset();
-      this.step = 'choose'; this.item = 'candle'; this.amount = ''; this.amountError = null; this.memorial = null;
-    } else {
-      this.step = 'pay';   // an unfinished payment for this grave: continue it
-    }
+      this.item = 'candle'; this.amount = ''; this.amountError = null; this.memorial = null;
+    }   // else: an unfinished offering for this grave, continue it
     this.grave = grave;
     this.dlg.showModal();
     this.render();
@@ -64,10 +61,10 @@ export class OfferingDialog {
     if (this.dlg.open) { this.render(); void this.loadDetail(true); }
   }
 
-  /** Continue an offering payment found after a refresh / wallet redirect. */
+  /** Continue an offering found after a refresh / wallet redirect. */
   async resume(p: PaymentView, redirectTx: { hash: string; account: string | null } | null): Promise<void> {
     if (!p.grave) return;
-    this.grave = p.grave; this.item = (p.item as OfferingItem) ?? 'candle'; this.step = 'pay';
+    this.grave = p.grave; this.item = (p.item as OfferingItem) ?? 'candle';
     void this.loadConfig();
     if (this.config) this.amount = formatUnits(p.amount, this.config.decimals, this.config.decimals).replace(/,/g, '');
     await this.flow.resume(p, redirectTx);
@@ -109,7 +106,7 @@ export class OfferingDialog {
 
   private pay() {
     const g = this.grave, amt = this.validAmount();
-    if (!g || amt === null) { this.step = 'choose'; this.render(); return; }
+    if (!g || amt === null) { this.render(); return; }
     const amount = this.amount.replace(/[,\s]/g, '');
     void this.flow.start(
       () => api.createOffering({ graveId: g.id, item: this.item, amount }),
@@ -148,101 +145,85 @@ export class OfferingDialog {
 
   // ------------------------------------------------------------------ rendering
 
+  /** One screen: pick an item, enter an amount, one button that connects the wallet and sends the offering. */
   private render() {
     const g = this.grave;
     if (!g) return;
     const title = document.getElementById('offer-title');
     if (title) title.textContent = `Leave an offering at $${g.meme.symbol}`;
-    const steps = h('ol', { class: 'steps', 'aria-label': 'Steps' },
-      h('li', { class: this.step === 'choose' ? 'on' : 'done' }, 'Offering'), h('li', { class: this.step === 'pay' ? 'on' : '' }, 'Pay'));
-    this.body.replaceChildren(steps, graveSummary(g), this.step === 'choose' ? this.renderChoose() : this.renderPay());
+    const F = this.flow.state;
+    this.body.replaceChildren(graveSummary(g), F.s === 'done' ? this.renderDone(F.payment) : this.renderForm());
   }
 
   private memorialNote(): Node {
     const cfg = this.config, d = this.detail, acct = this.wallet.account;
-    const off = cfg && !cfg.mintingEnabled ? ' Memorial minting is not switched on yet; yours is recorded and will be minted to your wallet once it is.' : '';
+    const off = cfg && !cfg.mintingEnabled ? " Minting isn't on yet; yours is saved until it is." : '';
     if (acct && d?.mine) {
       const m = d.mine;
-      const which = m.status === 'minted' && m.serial ? ` (Memorial #${String(m.serial).padStart(3, '0')})` : '';
-      return h('p', { class: 'field-msg' }, `You already earned this grave's Memorial NFT${which}. One per wallet — more offerings still grow the grave.${off}`);
+      const which = m.status === 'minted' && m.serial ? ` #${String(m.serial).padStart(3, '0')}` : '';
+      return h('p', { class: 'field-msg' }, `You already have this grave's Memorial NFT${which}.${off}`);
     }
-    return h('p', { class: 'field-msg' }, `${acct && d ? 'This is your first offering here: it' : 'Your first offering to a grave'} earns you its Memorial NFT, minted on NEAR. It evolves as the grave levels up.${off}`);
+    return h('p', { class: 'field-msg' }, `Your first offering here earns this grave's Memorial NFT.${off}`);
   }
 
-  private renderChoose() {
+  private renderForm() {
     const cfg = this.config;
+    if (!cfg) {
+      return h('div', { class: 'dlg-step' }, this.configError
+        ? h('p', { class: 'status bad' }, `Could not load the offering details: ${this.configError}`)
+        : h('p', { class: 'status busy' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Loading…'));
+    }
+    // while the wallet / NEAR is working, the choice is locked
+    const editable = ['review', 'rejected', 'error', 'expired', 'insufficient'].includes(this.flow.state.s);
     const items = h('div', { class: 'items', role: 'radiogroup', 'aria-label': 'Offering' },
       ...OFFERING_ITEMS.map((it) => h('button', {
-        class: 'item', type: 'button', role: 'radio', 'aria-checked': String(this.item === it.id),
+        class: 'item', type: 'button', role: 'radio', 'aria-checked': String(this.item === it.id), disabled: !editable,
         onclick: () => { this.item = it.id; this.render(); },
       }, itemArt(it.id), h('span', {}, it.name))));
     const input = h('input', {
-      id: 'offer-amount', inputmode: 'decimal', autocomplete: 'off', value: this.amount,
-      placeholder: cfg ? cfg.offeringMin : '10000', 'aria-describedby': 'offer-amount-msg',
+      id: 'offer-amount', inputmode: 'decimal', autocomplete: 'off', value: this.amount, disabled: !editable,
+      placeholder: cfg.offeringMin, 'aria-describedby': 'offer-amount-msg', 'aria-label': 'WTH amount',
       oninput: (e: Event) => { this.amount = (e.target as HTMLInputElement).value; },
-      onkeydown: (e: Event) => { if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); next(); } },
+      onkeydown: (e: Event) => { if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); this.pay(); } },
     });
-    const next = () => { if (this.validAmount() !== null) this.step = 'pay'; this.render(); };
     const quick = h('div', { class: 'quick' }, ...QUICK_AMOUNTS.map((a) =>
-      h('button', { class: 'amt', type: 'button', onclick: () => { this.amount = a; this.amountError = null; this.render(); } }, Number(a).toLocaleString('en-US'))));
-    return h('div', { class: 'dlg-step' },
-      h('div', { class: 'lbl' }, 'What do you leave?'), items,
-      h('label', { class: 'lbl', for: 'offer-amount' }, 'WTH amount'),
-      h('div', { class: 'row' }, input, h('span', { class: 'unit' }, 'WTH')), quick,
-      h('p', { id: 'offer-amount-msg', class: this.amountError ? 'field-msg bad' : 'field-msg' },
-        this.amountError ?? (cfg ? `At least ${Number(cfg.offeringMin).toLocaleString('en-US')} WTH. Every offering counts as one, whatever the amount.` : 'Loading prices…')),
-      this.memorialNote(),
-      h('div', { class: 'dlg-actions' }, h('button', { class: 'btn', type: 'button', disabled: !cfg, onclick: next }, 'Review')));
-  }
-
-  private renderPay() {
-    const cfg = this.config, g = this.grave!;
-    const F = this.flow.state;
-    if (F.s === 'done') return this.renderDone(F.payment);
-    if (!cfg) {
-      return h('div', { class: 'dlg-step' }, this.configError
-        ? h('p', { class: 'status bad' }, `Could not load prices: ${this.configError}`)
-        : h('p', { class: 'status busy' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Loading prices…'));
-    }
+      h('button', { class: 'amt', type: 'button', disabled: !editable, onclick: () => { this.amount = a; this.amountError = null; this.render(); } }, Number(a).toLocaleString('en-US'))));
     let amount = this.flow.payment?.amount ?? null;
-    if (!amount) { const v = this.validAmount(); amount = v === null ? null : v.toString(); }
-    const price = amount ? `${formatUnits(amount, cfg.decimals)} WTH` : '—';
-    const acct = this.wallet.account;
-    const summary = h('dl', { class: 'summary' },
-      h('dt', {}, 'Grave'), h('dd', {}, `$${g.meme.symbol} · plot #${g.plot}`),
-      h('dt', {}, 'Offering'), h('dd', {}, itemName(this.item)),
-      h('dt', {}, 'Amount'), h('dd', {}, h('b', {}, price)),
-      h('dt', {}, 'Paid to'), h('dd', { class: 'mono' }, cfg.receiver),
-      h('dt', {}, 'Wallet'), h('dd', {}, acct ? shortAccount(acct) : 'not connected'));
-    return h('div', { class: 'dlg-step' }, summary,
+    if (!amount && this.amount.trim()) { const v = this.validAmount(); amount = v === null ? null : v.toString(); }
+    const price = amount ? `${formatUnits(amount, cfg.decimals)} WTH` : 'WTH';
+    return h('div', { class: 'dlg-step' },
+      items,
+      h('div', { class: 'row amount-row' }, input, h('span', { class: 'unit' }, 'WTH')), quick,
+      h('p', { id: 'offer-amount-msg', class: this.amountError ? 'field-msg bad' : 'field-msg' },
+        this.amountError ?? `At least ${Number(cfg.offeringMin).toLocaleString('en-US')} WTH. Every offering counts as one.`),
+      this.memorialNote(),
       this.flow.view({
-        price, decimals: cfg.decimals, payLabel: `Offer ${price}`, onPay: () => this.pay(), onClose: () => this.dlg.close(),
-        back: () => { this.step = 'choose'; this.render(); },
+        price, decimals: cfg.decimals, solo: true,
+        actionLabel: 'Leave offering', connectLabel: 'Connect wallet & leave offering',
+        onAction: () => this.pay(), onClose: () => this.dlg.close(),
       }));
   }
 
   private renderDone(p: PaymentView) {
     const g = this.grave!, m = this.memorial, cfg = this.config;
-    let nft: Node;
-    if (!m) nft = h('p', { class: 'field-msg' }, 'Memorial status is unavailable right now.');
+    let nft: Node | null;
+    if (!m) nft = null;
     else if (m.status === 'minted') {
       const link = cfg?.nftContract && m.tokenId
-        ? h('a', { href: `https://nearblocks.io/nft-token/${cfg.nftContract}/${encodeURIComponent(m.tokenId)}`, target: '_blank', rel: 'noopener noreferrer' }, 'View on NearBlocks')
+        ? h('a', { href: `https://nearblocks.io/nft-token/${cfg.nftContract}/${encodeURIComponent(m.tokenId)}`, target: '_blank', rel: 'noopener noreferrer' }, 'View')
         : null;
-      nft = h('p', { class: 'status ok' }, `$${g.meme.symbol} — Memorial #${String(m.serial ?? 0).padStart(3, '0')} is in ${shortAccount(m.account)}. `, link);
+      nft = h('p', { class: 'field-msg' }, `$${g.meme.symbol} — Memorial #${String(m.serial ?? 0).padStart(3, '0')} is in your wallet. `, link);
     } else if (m.status === 'failed') {
-      nft = h('p', { class: 'status bad' }, m.error ?? 'Minting your Memorial NFT failed.');
+      nft = h('p', { class: 'field-msg bad' }, m.error ?? 'Minting your Memorial NFT failed.');
     } else if (!cfg?.mintingEnabled) {
-      nft = h('p', { class: 'field-msg' }, 'Your Memorial NFT is recorded. Minting is not switched on yet; it will be minted to your wallet as soon as it is.');
+      nft = h('p', { class: 'field-msg' }, 'Your Memorial NFT is saved and will be minted to your wallet once minting switches on.');
     } else {
-      nft = h('p', { class: 'status busy', role: 'status' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }),
-        m.error ? `${m.error} Your Memorial NFT will arrive in your wallet.` : 'Minting your Memorial NFT on NEAR…');
+      nft = h('p', { class: 'field-msg busy-line' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Minting your Memorial NFT…');
     }
     return h('div', { class: 'dlg-step done' },
-      h('p', { class: 'status ok' }, `Your ${itemName(p.item ?? '').toLowerCase()} was left at $${g.meme.symbol}. The grave now has ${g.offerings.toLocaleString('en-US')} ${g.offerings === 1 ? 'offering' : 'offerings'}.`),
-      h('div', { class: 'lbl' }, 'Your Memorial NFT'),
+      h('p', { class: 'status ok' }, `Your ${itemName(p.item ?? '').toLowerCase()} was left at $${g.meme.symbol}.`),
       nft,
-      h('div', { class: 'dlg-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => this.dlg.close() }, 'Pay respects')));
+      h('div', { class: 'dlg-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => this.dlg.close() }, 'R.I.P.')));
   }
 }
 

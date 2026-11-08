@@ -231,12 +231,12 @@ export class GraveService {
 
   getPayment(id: unknown): PaymentView | GraveError {
     const row = typeof id === 'string' ? this.row(id) : undefined;
-    return row ? this.view(row) : err(404, 'not_found', 'Payment not found.');
+    return row ? this.view(row) : err(404, 'not_found', 'Not found.');
   }
 
   cancelPayment(id: unknown, now: number): PaymentView | GraveError {
     const row = typeof id === 'string' ? this.row(id) : undefined;
-    if (!row) return err(404, 'not_found', 'Payment not found.');
+    if (!row) return err(404, 'not_found', 'Not found.');
     if (row.status === 'pending' && !row.tx_hash) {
       this.setStatus(row.id, 'expired', null, now);
       if (row.kind === 'grave') this.d.onReservedChanged?.(this.reservedPlots());
@@ -247,15 +247,15 @@ export class GraveService {
   /** Records the transaction and verifies it. Safe to call repeatedly. */
   async confirmPayment(id: unknown, txHash: string, signerId: string, now: number): Promise<PaymentView | GraveError> {
     const row = typeof id === 'string' ? this.row(id) : undefined;
-    if (!row) return err(404, 'not_found', 'Payment not found.');
+    if (!row) return err(404, 'not_found', 'Not found.');
     if (!NEAR_ACCOUNT_RE.test(signerId)) return err(400, 'bad_account', 'That is not a NEAR account.');
     if (row.status === 'fulfilled' || row.status === 'failed' || row.status === 'unfulfillable') {
-      if (row.tx_hash && row.tx_hash !== txHash) return err(409, 'already_confirmed', 'This payment was already confirmed with another transaction.');
+      if (row.tx_hash && row.tx_hash !== txHash) return err(409, 'already_confirmed', 'This was already confirmed with another transaction.');
       return this.view(row);
     }
-    if (row.tx_hash && row.tx_hash !== txHash) return err(409, 'already_confirmed', 'This payment is already being confirmed with another transaction.');
+    if (row.tx_hash && row.tx_hash !== txHash) return err(409, 'already_confirmed', 'This is already being confirmed with another transaction.');
     const other = this.d.db.prepare('SELECT id FROM payments WHERE tx_hash = ? AND id <> ?').get(txHash, row.id);
-    if (other) return err(409, 'tx_used', 'That transaction was already used for another payment.');
+    if (other) return err(409, 'tx_used', 'That transaction was already used.');
 
     if (!row.tx_hash) {
       // pending -> confirming keeps the hold; an expired hold keeps its status but remembers the tx
@@ -313,9 +313,9 @@ export class GraveService {
     const outcome = transaction(this.d.db, () => {
       const fresh = this.row(row.id)!;
       if (fresh.status === 'fulfilled') return 'already';
-      if (this.d.db.prepare('SELECT 1 FROM graves WHERE plot = ?').get(row.plot)) return 'Paid, but this plot was taken after your hold expired.';
+      if (this.d.db.prepare('SELECT 1 FROM graves WHERE plot = ?').get(row.plot)) return 'Your WTH arrived, but this plot was taken after your reservation expired.';
       if (this.d.db.prepare('SELECT 1 FROM graves WHERE chain = ? AND contract = ?').get(row.chain, row.contract)) {
-        return 'Paid, but someone else created a grave for this meme after your hold expired.';
+        return 'Your WTH arrived, but someone else created a grave for this meme after your reservation expired.';
       }
       // creating a grave does not mint an NFT; the creator gets one by making an offering like anyone else
       this.d.db.prepare(`INSERT INTO graves (plot, chain, contract, name, symbol, decimals, icon, message, creator, payment_id, created_at)
@@ -323,7 +323,7 @@ export class GraveService {
         .run(row.plot, row.chain, row.contract, meme.name, meme.symbol, meme.decimals, meme.icon, row.message, payer, row.id, now);
       this.d.db.prepare("UPDATE payments SET status = 'fulfilled', payer = ?, error = NULL, updated_at = ? WHERE id = ?").run(payer, now, row.id);
       // a late but valid payment wins over someone else's newer, still-unpaid hold on the same plot or meme
-      this.d.db.prepare(`UPDATE payments SET status = 'expired', error = 'Someone else completed payment for this grave first.', updated_at = ?
+      this.d.db.prepare(`UPDATE payments SET status = 'expired', error = 'Someone else created this grave first.', updated_at = ?
                          WHERE kind = 'grave' AND id <> ? AND status = 'pending' AND tx_hash IS NULL AND (plot = ? OR (chain = ? AND contract = ?))`)
         .run(now, row.id, row.plot, row.chain, row.contract);
       return 'created';
@@ -345,7 +345,7 @@ export class GraveService {
       const fresh = this.row(row.id)!;
       if (fresh.status === 'fulfilled') return { kind: 'already' as const };
       const g = db.prepare('SELECT offering_count FROM graves WHERE id = ?').get(row.grave_id) as { offering_count: number } | undefined;
-      if (!g) return { kind: 'error' as const, reason: 'Paid, but this grave no longer exists.' };
+      if (!g) return { kind: 'error' as const, reason: 'Your WTH arrived, but this grave no longer exists.' };
       // payment_id is UNIQUE: a payment can only ever become one offering
       db.prepare('INSERT INTO offerings (grave_id, payment_id, payer, item, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)')
         .run(row.grave_id, row.id, payer, row.item, row.amount, now);

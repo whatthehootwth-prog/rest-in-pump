@@ -12,7 +12,7 @@ type Lookup =
   | { s: 'exists'; meme: MemeInfo; grave: GraveInfo } | { s: 'ok'; meme: MemeInfo };
 
 /**
- * "Create a grave": meme contract → last words → pay the grave price in WTH → a level-1 grave on the plot.
+ * "Create a grave": meme contract → last words → send the grave price in WTH → a level-1 grave on the plot.
  * Creating a grave does not mint an NFT; memorials come from offerings (the creator can make one too).
  */
 export class CreateGraveDialog {
@@ -102,7 +102,7 @@ export class CreateGraveDialog {
   private render() {
     const order = ['meme', 'words', 'pay'] as const;
     const steps = h('ol', { class: 'steps', 'aria-label': 'Steps' },
-      ...(['Meme', 'Last words', 'Pay'] as const).map((label, i) =>
+      ...(['Meme', 'Last words', 'Confirm'] as const).map((label, i) =>
         h('li', { class: order.indexOf(this.step) === i ? 'on' : order.indexOf(this.step) > i ? 'done' : '' }, label)));
     const title = document.getElementById('grave-title');
     if (title) title.textContent = `Create a grave at plot #${this.plot}`;
@@ -164,7 +164,7 @@ export class CreateGraveDialog {
         meme ? memeChip(meme) : null,
         h('p', { class: 'status ok' }, g ? `Done. $${g.meme.symbol} now has a grave at plot #${g.plot}.` : 'Done.'),
         h('p', { class: 'field-msg' }, 'Creating a grave does not mint an NFT. Anyone who leaves an offering here — you included — gets this grave\'s Memorial NFT with their first offering.'),
-        h('div', { class: 'dlg-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => this.dlg.close() }, 'Pay respects')));
+        h('div', { class: 'dlg-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => this.dlg.close() }, 'Done')));
     }
     if (!cfg) {
       return h('div', { class: 'dlg-step' }, this.configError
@@ -179,11 +179,12 @@ export class CreateGraveDialog {
       h('dt', {}, 'Plot'), h('dd', {}, `#${this.plot}`),
       h('dt', {}, 'Last words'), h('dd', {}, `“${this.message}”`),
       h('dt', {}, 'Price'), h('dd', {}, h('b', {}, price)),
-      h('dt', {}, 'Paid to'), h('dd', { class: 'mono' }, cfg.receiver),
+      h('dt', {}, 'Goes to'), h('dd', { class: 'mono' }, cfg.receiver),
       h('dt', {}, 'Wallet'), h('dd', {}, acct ? shortAccount(acct) : 'not connected'));
     return h('div', { class: 'dlg-step' }, summary,
       this.flow.view({
-        price, decimals: cfg.decimals, payLabel: `Pay ${price}`, onPay: () => this.pay(), onClose: () => this.dlg.close(),
+        price, decimals: cfg.decimals, actionLabel: `Create grave · ${price}`, connectLabel: 'Connect wallet & create grave',
+        onAction: () => this.pay(), onClose: () => this.dlg.close(),
         back: () => { this.step = 'words'; this.render(); },
       }));
   }

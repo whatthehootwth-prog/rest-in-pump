@@ -101,7 +101,7 @@ async function main() {
   void wallet.restore();
   const createGrave = new CreateGraveDialog(wallet, (t) => hud.toast(t));
   const offering = new OfferingDialog(wallet, (t) => hud.toast(t));
-  const plotCard = new PlotCard(wallet, (plot) => void createGrave.open(plot), (g) => void offering.open(graves.grave(g.id) ?? g));
+  const plotCard = new PlotCard((plot) => void createGrave.open(plot), (g) => void offering.open(graves.grave(g.id) ?? g));
   let focus: PlotFocus | null = null;
   const remotes = new RemotePlayers(world.scene);
   input.bindTouchButtons(document);
@@ -203,7 +203,6 @@ async function main() {
       case 'grave_updated':
         graves.addGrave(m.grave);
         offering.graveUpdated(m.grave);
-        plotCard.invalidate(m.grave.id);
         chat.system(`${shortAccount(m.offering.payer)} left ${itemName(m.offering.item).toLowerCase()} at $${m.grave.meme.symbol}.`);
         if (m.offering.levelUp) chat.system(`$${m.grave.meme.symbol} is now a Level ${m.grave.level} ${levelName(m.grave.level)}.`);
         break;
@@ -260,7 +259,7 @@ async function main() {
       return;
     }
     if (p.status === 'failed' || p.status === 'expired') { pendingPayment.clear(); return; }
-    if (p.status === 'confirming') hud.toast('Still confirming your payment on NEAR…');
+    if (p.status === 'confirming') hud.toast('Still confirming your transaction on NEAR…');
     if (p.kind === 'grave') await createGrave.resume(p, redirectTx);
     else await offering.resume(p, redirectTx);
   };

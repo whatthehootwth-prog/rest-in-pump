@@ -342,3 +342,6 @@ body.landing-open .plot-card { display: none !important; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
 .dlg-body a { color: var(--focus); }
+.amount-row { margin-top: 14px; }
+#offer-body .items { margin-top: 14px; }
+.busy-line { display: flex; align-items: center; gap: 8px; }

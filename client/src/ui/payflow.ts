@@ -4,9 +4,10 @@ import { Wallet, WalletRejectedError } from '../wallet/wallet.ts';
 import { h } from './dom.ts';
 
 /**
- * The WTH payment flow shared by "create a grave" and "leave an offering":
- * connect wallet → create the payment on the server → check balance → sign the transfer → server verifies on NEAR.
- * The open payment id is kept in localStorage so a refresh or a wallet redirect can finish it.
+ * The WTH transfer flow shared by "create a grave" and "leave an offering":
+ * connect wallet → create the order on the server → check balance → sign the transfer → server verifies on NEAR.
+ * The open order id is kept in localStorage so a refresh or a wallet redirect can finish it.
+ * (User-facing text avoids "pay"/"payment" on purpose: it should feel like a game, not a checkout.)
  */
 
 const PENDING_KEY = 'rip.pendingPayment';
@@ -33,7 +34,7 @@ export interface PayHost {
   isOpen(): boolean;
   close(): void;
   toast(t: string): void;
-  /** Toast shown when a payment completes while the dialog is closed. */
+  /** Toast shown when an order completes while the dialog is closed. */
   doneToast(p: PaymentView): string;
 }
 
@@ -61,7 +62,7 @@ export class PayFlow {
   reset() { this.stopTimer(); this.state = { s: 'review' }; this.payment = null; }
   get open(): boolean { return !!this.payment && (this.payment.status === 'pending' || this.payment.status === 'confirming'); }
 
-  /** Pay button. `create` makes (or resumes) the payment on the server. */
+  /** Main button. `create` makes (or resumes) the order on the server. */
   async start(create: () => Promise<PaymentView>, reuse: (p: PaymentView) => boolean): Promise<void> {
     let account = this.wallet.account;
     if (!account) {
@@ -100,7 +101,7 @@ export class PayFlow {
     await this.confirm(hash, account);
   }
 
-  /** Continue a payment found after a refresh / wallet redirect. */
+  /** Continue an order found after a refresh / wallet redirect. */
   async resume(p: PaymentView, redirectTx: { hash: string; account: string | null } | null): Promise<void> {
     this.payment = p;
     if (p.status === 'confirming') { this.state = { s: 'confirming', since: Date.now() }; void this.poll(false); return; }
@@ -162,7 +163,7 @@ export class PayFlow {
     } else if (v.status === 'unfulfillable') {
       pendingPayment.clear(); this.state = { s: 'unfulfillable', msg: v.error ?? '' };
     } else if (v.status === 'failed') {
-      pendingPayment.clear(); this.state = { s: 'error', msg: v.error ?? 'The payment could not be verified.', retry: false };
+      pendingPayment.clear(); this.state = { s: 'error', msg: v.error ?? 'The transfer could not be verified on NEAR.', retry: false };
     } else if (v.status === 'pending' && v.error) {
       this.state = { s: 'error', msg: v.error, retry: true };   // wrong/underpaid tx: try again
     } else if (v.status === 'expired') {
@@ -192,41 +193,52 @@ export class PayFlow {
   }
 
   /** Status line, hold timer, tx link and buttons for the current state. Returns null for 'done' (the dialog renders that). */
-  view(o: { price: string; decimals: number; back?: () => void; payLabel: string; onPay: () => void; onClose: () => void }): Node | null {
+  view(o: {
+    price: string; decimals: number; back?: () => void;
+    /** Main button label with a wallet connected, and without one. */
+    actionLabel: string; connectLabel: string;
+    /** Only the main button while reviewing (no Back / Cancel). */
+    solo?: boolean;
+    onAction: () => void; onClose: () => void;
+  }): Node | null {
     const P = this.state;
     if (P.s === 'done') return null;
     const busy = (text: string) => h('p', { class: 'status busy', role: 'status' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), text);
     const btn = (label: string, fn: () => void, quiet = false) => h('button', { class: quiet ? 'btn btn-quiet' : 'btn', type: 'button', onclick: fn }, label);
-    const pay = (label: string) => btn(label, o.onPay);
+    const act = (label: string) => btn(label, o.onAction);
     const close = btn('Close', o.onClose);
     const cancel = btn(this.payment?.status === 'pending' ? (this.noun === 'grave' ? 'Cancel reservation' : 'Cancel') : 'Close',
       () => void this.cancel().then(o.onClose), true);
     let status: Node | null = null, actions: Node[] = [];
     switch (P.s) {
-      case 'review': actions = [o.back ? btn('Back', o.back, true) : cancel, pay(this.wallet.account ? o.payLabel : 'Connect wallet & pay')]; break;
+      case 'review': {
+        const main = act(this.wallet.account ? o.actionLabel : o.connectLabel);
+        actions = o.solo ? [main] : [o.back ? btn('Back', o.back, true) : cancel, main];
+        break;
+      }
       case 'connecting': status = busy('Opening your wallet…'); break;
       case 'holding': status = busy(this.noun === 'grave' ? 'Reserving this plot…' : 'Preparing your offering…'); break;
       case 'checking': status = busy('Checking your WTH balance…'); break;
       case 'insufficient':
         status = h('p', { class: 'status bad' }, `Not enough WTH. You have ${formatUnits(P.balance, o.decimals)} WTH and need ${o.price}.`);
-        actions = [cancel, pay('I topped up — try again')]; break;
+        actions = [cancel, act('I topped up — try again')]; break;
       case 'approve': status = busy('Approve the WTH transfer in your wallet…'); break;
-      case 'confirming': status = busy('Payment sent. Confirming it on NEAR…'); break;
+      case 'confirming': status = busy('Sent. Confirming it on NEAR…'); break;
       case 'slow':
-        status = h('p', { class: 'status' }, `NEAR is taking a while to confirm. You can close this — your ${this.noun} counts as soon as the payment is confirmed, even if you refresh.`);
+        status = h('p', { class: 'status' }, `NEAR is taking a while to confirm. You can close this — your ${this.noun} counts as soon as NEAR confirms it, even if you refresh.`);
         actions = [close]; break;
       case 'rejected':
         status = h('p', { class: 'status bad' }, 'You cancelled the transfer in your wallet. Nothing was sent.');
-        actions = [cancel, pay('Try again')]; break;
+        actions = [cancel, act('Try again')]; break;
       case 'error':
         status = h('p', { class: 'status bad' }, P.msg);
-        actions = P.retry ? [cancel, pay('Try again')] : [close]; break;
+        actions = P.retry ? [cancel, act('Try again')] : [close]; break;
       case 'expired':
-        status = h('p', { class: 'status bad' }, `${this.noun === 'grave' ? 'Your reservation' : 'This offering'} expired before payment. Nothing was charged.`);
-        actions = [btn('Close', () => void this.cancel().then(o.onClose), true), pay('Start again & pay')];
+        status = h('p', { class: 'status bad' }, `${this.noun === 'grave' ? 'Your reservation' : 'This offering'} expired before it was sent. Nothing was charged.`);
+        actions = [btn('Close', () => void this.cancel().then(o.onClose), true), act('Start again')];
         this.payment = null; break;
       case 'unfulfillable':
-        status = h('p', { class: 'status bad' }, `Your payment arrived, but the ${this.noun} could not be ${this.noun === 'grave' ? 'created' : 'recorded'}: ${P.msg} Contact support with your transaction hash for a refund.`);
+        status = h('p', { class: 'status bad' }, `Your WTH arrived, but the ${this.noun} could not be ${this.noun === 'grave' ? 'created' : 'recorded'}: ${P.msg} Contact support with your transaction hash for a refund.`);
         actions = [close]; break;
     }
     const left = this.payment && this.payment.status === 'pending' ? this.payment.expiresAt - Date.now() : 0;

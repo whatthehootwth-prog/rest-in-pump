@@ -20,7 +20,7 @@ interface PlotView {
 const NEAR_RANGE = 1.0;   // how far outside the plot rectangle still counts as "at" the plot (rows are 1.6 m apart; nearest wins)
 
 /**
- * The 40 grave plots: empty ones (dirt bed + "DEAD MEME HERE" sign), real graves built from server data
+ * The 40 grave plots: empty ones (dirt bed + "NO MEME BURIED. YET." sign), real graves built from server data
  * (the tombstone grows with the grave's memorial level and shows the meme logo, ticker and name, with the
  * latest offerings laid in front), and the highlight around the plot the player is standing at.
  */
@@ -40,7 +40,7 @@ export class GraveField {
     this.colliders = colliders;
     this.mats = makeMaterials(stone, iron);
     const g = sharedGeometry();
-    const signTex = labelTexture(['DEAD MEME', 'HERE'], { w: 256, h: 112, color: '#2a1d12', font: '700 34px Georgia, serif', bg: '#b08a5a' });
+    const signTex = labelTexture(['NO MEME', 'BURIED.', 'YET.'], { w: 256, h: 112, color: '#2a1d12', font: '700 27px Georgia, serif', bg: '#b08a5a' });
     const signMat = new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.9 });
     this.views = PLOTS.map((plot) => {
       const group = new THREE.Group();

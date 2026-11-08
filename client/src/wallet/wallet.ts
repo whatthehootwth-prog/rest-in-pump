@@ -84,7 +84,7 @@ export class Wallet {
         network: 'mainnet',
         modules: [mnw.setupMyNearWallet(), meteor.setupMeteorWallet(), here.setupHereWallet(), intear.setupIntearWallet()],
       });
-      const modal = ui.setupModal(selector, { theme: 'dark', description: 'Connect a NEAR wallet to pay for graves in $WTH.' });
+      const modal = ui.setupModal(selector, { theme: 'dark', description: 'Connect a NEAR wallet holding $WTH to create graves and leave offerings.' });
       const read = () => selector.store.getState().accounts.find((a) => a.active)?.accountId ?? null;
       this.set(read());
       selector.store.observable.subscribe(() => this.set(read()));
