@@ -119,6 +119,7 @@ export function createOwl(): Owl {
       const up = Math.max(air, scream);
       let lean = 0, twist = 0, sway = 0.12, bob = 0.06, hop = 0, peck = 0;
       if (style === 'glitch') { st.gT -= dt; if (st.gT < 0) { st.gT = rr(0.07, 0.2); st.g = st.g.map(() => rr(-1, 1)); } twist = st.g[0] * 0.7; sway = 0.3; }
+      const posing = p.emote > 0 && walk < 0.3 && !p.air;
       for (const s of [-1, 1]) {
         const ph = p.phase + (s > 0 ? 0 : Math.PI), sp = Math.sin(ph), cp = Math.cos(ph), g = st.g, k = s > 0 ? 0 : 6;
         let lx = 0, lz = 0, ls = 1, ax = 0, az = 0, as = 1, armSpin: number | null = null;
@@ -158,6 +159,8 @@ export function createOwl(): Owl {
         }
         const w = walk * run, snap = style === 'glitch' ? 45 : 16;
         const leg = legs[s], arm = arms[s];
+        // during an emote the emote code below owns the limb rotations (pulling both ways would stop the pose halfway)
+        if (posing) { leg.scale.y = damp(leg.scale.y, 1, snap, dt); arm.scale.y = damp(arm.scale.y, 1, snap, dt); continue; }
         leg.rotation.x = damp(leg.rotation.x, lx * w + air * (s > 0 ? 0.5 : -0.25), snap, dt);
         leg.rotation.z = damp(leg.rotation.z, s * (0.04 + lz * walk), snap, dt);
         leg.scale.y = damp(leg.scale.y, lerp(1, ls, walk), snap, dt);
@@ -211,15 +214,22 @@ export function createOwl(): Owl {
         body.rotation.y = damp(body.rotation.y, Math.sin(b * 0.25) * 0.7, k, dt);
         neck.rotation.z = damp(neck.rotation.z, Math.sin(b) * 0.25, k, dt);
         emOpen = 0.55 + Math.sin(b) * 0.2;
-      } else if (em === 'club') {                 // both hands up, head banging, bouncing
-        const b = t * Math.PI * 2 * 2.13;
-        // both hands up, pumping to the beat ("push your hands up")
-        for (const s of [-1, 1]) armTo(s, -0.25 + Math.sin(b + s) * 0.12, 2.75 + (Math.sin(b) > 0 ? 0.25 : -0.2));
-        for (const s of [-1, 1]) legTo(s, -Math.max(0, Math.sin(b + (s > 0 ? 0 : Math.PI))) * 0.35, 0.06);
-        body.position.y = HIP - Math.abs(Math.sin(b)) * 0.05;
-        body.rotation.x = damp(body.rotation.x, 0.12, k, dt);
-        neck.rotation.x = Math.sin(b * 2) * 0.45;
-        emOpen = 0.85;
+      } else if (em === 'club') {                 // rocking out: both hands up and pumping, jumping, swaying, head banging
+        const b = t * Math.PI * 2 * 2.13;          // ~128 bpm
+        const beat = Math.sin(b), half = Math.sin(b / 2), quarter = Math.sin(b / 4);
+        for (const s of [-1, 1]) {
+          // both arms straight up, punching the air on every beat and waving wide on the off-beat
+          arms[s].rotation.x = damp(arms[s].rotation.x, -0.08 + Math.sin(b * 2 + s) * 0.1, 30, dt);
+          arms[s].rotation.z = damp(arms[s].rotation.z, s * (3.0 - Math.max(0, beat) * 0.28 + half * s * 0.1), 30, dt);   // straight up, pumping
+          legTo(s, -Math.max(0, Math.sin(b + (s > 0 ? 0 : Math.PI))) * 0.55, 0.1 + Math.abs(half) * 0.12);
+        }
+        body.position.y = HIP + Math.abs(beat) * 0.1;                                  // jumping to the beat
+        body.rotation.z = damp(body.rotation.z, half * 0.24, 20, dt);                   // swaying side to side
+        body.rotation.y = damp(body.rotation.y, quarter * 0.6, 12, dt);                 // turning to the crowd
+        body.rotation.x = damp(body.rotation.x, 0.1 + Math.max(0, beat) * 0.18, 24, dt);
+        neck.rotation.x = Math.sin(b * 2) * 0.6;                                        // head banging
+        neck.rotation.z = damp(neck.rotation.z, half * 0.2, 16, dt);
+        emOpen = 0.55 + Math.max(0, beat) * 0.6; squint = beat > 0.6 ? 0.35 : 1;       // shouting on the beat
       } else if (em === 'pray') {                 // frantic worship: three quick bows, hands shoot up, one huge bow to the ground
         const c = t % 2.4;
         const quick = c < 1.2, up = c >= 1.2 && c < 1.75;
