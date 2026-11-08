@@ -211,10 +211,10 @@ export function createOwl(): Owl {
         body.rotation.y = damp(body.rotation.y, Math.sin(b * 0.25) * 0.7, k, dt);
         neck.rotation.z = damp(neck.rotation.z, Math.sin(b) * 0.25, k, dt);
         emOpen = 0.55 + Math.sin(b) * 0.2;
-      } else if (em === 'club') {                 // fist pumping, head banging, bouncing to 128 bpm
+      } else if (em === 'club') {                 // both hands up, head banging, bouncing
         const b = t * Math.PI * 2 * 2.13;
-        armTo(1, -0.3, 2.6 + (Math.sin(b) > 0 ? 0.35 : -0.35));
-        armTo(-1, 0.5, 0.5 + Math.abs(Math.sin(b)) * 0.35);
+        // both hands up, pumping to the beat ("push your hands up")
+        for (const s of [-1, 1]) armTo(s, -0.25 + Math.sin(b + s) * 0.12, 2.75 + (Math.sin(b) > 0 ? 0.25 : -0.2));
         for (const s of [-1, 1]) legTo(s, -Math.max(0, Math.sin(b + (s > 0 ? 0 : Math.PI))) * 0.35, 0.06);
         body.position.y = HIP - Math.abs(Math.sin(b)) * 0.05;
         body.rotation.x = damp(body.rotation.x, 0.12, k, dt);
