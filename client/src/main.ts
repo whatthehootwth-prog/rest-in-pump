@@ -289,7 +289,7 @@ async function main() {
     remotes.update(dt, t);
     focus = entered ? graves.focusAt(player.pos) : null;
     graves.update(t, focus);
-    plotCard.show(focus, player.emote !== 0);   // hidden while posing, so the scene is clear for screenshots
+    plotCard.show(focus);
     if (entered) cam.update(dt, input, player.pos, player.height, world.groundHeight);
     else cam.cinematic(t, world.groundHeight);
     pushers.length = 0; pushers.push(player.pos); remotes.positions(pushers);

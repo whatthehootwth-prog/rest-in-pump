@@ -6,8 +6,7 @@ import { h } from './dom.ts';
  * The one-line prompt shown when the player stands at a plot, game style:
  *   [icon] $NGMI · Level 3 Honored · Leave an offering [E]
  *   Empty plot #12 · Create a grave [E]
- * The whole pill is the button. It hides while the player is posing (an emote is playing) so the scene stays
- * clear for screenshots; details live in the dialogs.
+ * The whole pill is the button; details live in the dialogs.
  */
 export class PlotCard {
   private readonly el = document.getElementById('plot-card') as HTMLElement;
@@ -21,9 +20,8 @@ export class PlotCard {
     this.onOffer = onOffer;
   }
 
-  /** @param posing true while an emote is playing: the prompt hides. */
-  show(focus: PlotFocus | null, posing = false): void {
-    const f = posing ? null : focus;
+  show(focus: PlotFocus | null): void {
+    const f = focus;
     const key = !f ? '' : f.kind === 'grave'
       ? `g${f.grave.id}:${f.grave.level}:${f.grave.meme.symbol}:${this.canAct}`
       : `${f.kind}${f.plot.id}:${this.canAct}`;
