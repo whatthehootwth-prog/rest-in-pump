@@ -9,7 +9,7 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 - [x] Each player gets a random weird walk on join (9 styles, server-assigned, cannot be changed)
 - [x] Emote bar: Dance, Club, Pray (hands together, bowing), Cry (kneels and cries), Roll (rolls around on the ground) — synced to everyone; keys 1–5
 - [x] Snapshot button (P) saves a PNG of the scene
-- [x] Music + sound effects, synthesized in the browser (no audio files): spooky-silly loop, hop, emotes, offerings, new graves, level-ups, chat, snapshot; mute button + M, Music / Sound effects toggles in Settings
+- [x] Music + sound effects, synthesized in the browser (no audio files): sad graveyard theme, weird dance / club tracks while you dance or club, cartoon crying (harder when rolling), hop, offerings, new graves, level-ups, chat, snapshot; mute button + M, Music / Sound effects toggles in Settings
 - [x] Chat (bottom left): server-relayed, validated, rate-limited, speech bubbles above heads
 - [x] Fixed low render resolution (no resolution setting)
 - [x] Intro scene: pitch, Enter the Meme Graveyard, What is Rest In Pump? explainer, real player count; joining happens only on Enter

@@ -35,10 +35,10 @@ export class PlotCard {
     const action = (label: string, onclick: () => void, lead: (Node | string)[]) => h('button', {
       class: 'pc-pill', type: 'button', disabled: !this.canAct, onclick,
       title: this.canAct ? undefined : 'Waiting for the connection to the graveyard…',
-    }, ...lead, h('span', { class: 'pc-action' }, this.canAct ? label : 'Connecting…'), this.canAct ? kbd : null);
+    }, ...lead, h('span', { class: 'pc-action' }, this.canAct ? label : 'Connecting…', this.canAct ? kbd : null));
 
     if (f.kind === 'empty') {
-      this.el.replaceChildren(action('Create a grave', () => this.onCreate(f.plot.id), [h('span', { class: 'pc-what' }, `Empty plot #${f.plot.id}`), sep()]));
+      this.el.replaceChildren(action('Create a grave', () => this.onCreate(f.plot.id), [h('span', { class: 'pc-what' }, `Empty plot #${f.plot.id}`)]));
     } else if (f.kind === 'reserved') {
       this.el.replaceChildren(h('div', { class: 'pc-pill pc-info' }, `Plot #${f.plot.id} · someone is creating a grave here`));
     } else {
@@ -49,7 +49,6 @@ export class PlotCard {
       this.el.replaceChildren(action('Leave an offering', () => this.onOffer(g), [
         icon,
         h('span', { class: 'pc-what' }, h('b', {}, `$${g.meme.symbol}`), h('span', { class: 'pc-lvl' }, ` · Level ${g.level} ${levelName(g.level).replace(' Grave', '')}`)),
-        sep(),
       ]));
     }
   }
@@ -62,4 +61,3 @@ export class PlotCard {
   }
 }
 
-const sep = () => h('span', { class: 'pc-sep', 'aria-hidden': 'true' });
