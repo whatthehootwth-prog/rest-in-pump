@@ -340,6 +340,7 @@ button.pc-pill:hover:not(:disabled) .pc-action { filter: brightness(1.08); }
 }
 .amt:hover { border-color: var(--focus); }
 .grave-sum { margin-bottom: 4px; }
+.last-words { margin: 8px 0 0; padding: 8px 10px; border-left: 2px solid var(--focus); background: #1d1c23; font-size: 13px; font-style: italic; overflow-wrap: anywhere; }
 .level-line { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
 .level-line b { color: var(--focus); font-weight: 700; }
 .progress { height: 6px; margin-top: 6px; background: #24232b; border-radius: 3px; overflow: hidden; }

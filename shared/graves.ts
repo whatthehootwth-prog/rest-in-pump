@@ -105,6 +105,8 @@ export interface GraveInfo {
   level: GraveLevel;
   /** Most recent offering items, newest first (for decoration). */
   recentItems: string[];
+  /** How many times each item was offered here (successful offerings only). Drives the size of the piles. */
+  itemCounts: Partial<Record<OfferingItem, number>>;
 }
 
 export interface PriceConfig {

@@ -81,7 +81,7 @@ export class GraveField {
   addGrave(g: GraveInfo): void {
     const v = this.views[g.plot - 1];
     if (!v) return;
-    if (v.grave && v.grave.id === g.id && v.grave.level === g.level && v.grave.recentItems.join() === g.recentItems.join()) {
+    if (v.grave && v.grave.id === g.id && v.grave.level === g.level && JSON.stringify(v.grave.itemCounts ?? {}) === JSON.stringify(g.itemCounts ?? {}) && v.grave.recentItems.join() === g.recentItems.join()) {
       v.grave = g;   // only the count changed
       return;
     }
@@ -322,19 +322,104 @@ function disposeGrave(root: THREE.Object3D) {
   }
 }
 
-/** The latest offerings, laid out in a row in front of the stone (newest in the middle). */
+/**
+ * How many props a pile shows for a number of offerings: one each at first, then it keeps growing but slower
+ * (3 -> 3, 12 -> 11, 48 -> 19, 400 -> 31, 3000 -> 43), capped by the grave's level so a popular grave stays cheap
+ * to draw (all props are merged, so the cost is in vertices, not draw calls).
+ */
+export function pileSize(count: number, level: number): number {
+  if (count <= 0) return 0;
+  if (count <= 3) return count;
+  return Math.min(PILE_CAP[level - 1] ?? 44, Math.round(3 + 4 * Math.log2(count / 3)));
+}
+const PILE_CAP = [8, 16, 28, 44];
+/** How many of a pile fit on the grave itself; the rest spills onto the grass around it. */
+const ON_GRAVE = 14;
+
+/**
+ * The offerings at a grave: one pile per item, growing with how many times it was offered. Flowers spread into a
+ * flower bed, candles form rings round the stone, noodle cups stack into towers, rugs pile up, diamonds scatter,
+ * copium tanks line up. Positions are seeded by the grave, so every player sees the same piles. All props are
+ * merged into one mesh per material, so even a huge pile costs only a few draw calls.
+ */
 function addOfferings(root: THREE.Group, g: GraveInfo, m: ReturnType<typeof makeMaterials>) {
-  const slots = [0, -0.22, 0.22, -0.44, 0.44, -0.11];
-  const z = g.level === 4 ? 0.98 : g.level === 3 ? -0.38 : -0.48;
-  const y = [0.08, 0.1, 0.14, 0.2][g.level - 1];
-  g.recentItems.slice(0, slots.length).forEach((item, i) => {
-    const prop = offeringProp(item, m);
-    if (!prop) return;
-    prop.position.set(slots[i], y, z + (i % 2) * 0.12);
-    prop.rotation.y = ((g.id * 7 + i * 13) % 10) / 10 - 0.5;
-    prop.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true; });
-    root.add(prop);
+  const counts: Record<string, number> = { ...(g.itemCounts ?? {}) };
+  for (const it of g.recentItems) if (!counts[it]) counts[it] = 1;   // older data without counts
+  // where the floor is, and the free area in front of the stone, per level
+  const floor = [0.06, 0.1, 0.14, 0.2][g.level - 1];
+  const zFront = [-0.55, -0.55, -0.45, 0.25][g.level - 1];   // just in front of the stone / inside the mausoleum
+  const zEdge = g.level === 4 ? 1.02 : 1.05;
+  let seed = g.id * 9301 + 49297;
+  const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+  const tmp = new THREE.Group();
+  const place = (item: string, x: number, y: number, z: number, rot = rnd() * Math.PI * 2, scale = 1) => {
+    const p = offeringProp(item, m);
+    if (!p) return;
+    p.position.set(x, y, z); p.rotation.y = rot; p.scale.setScalar(scale);
+    tmp.add(p);
+  };
+
+  const n = (item: string) => pileSize(counts[item] ?? 0, g.level);
+  /** A spot on the grass just outside the plot (or the mausoleum base), mostly at the front and sides. */
+  const spill = (): [number, number] => {
+    const hx = 0.94 + rnd() * 0.5, hz = 1.34 + rnd() * 0.5;
+    const t = rnd() * 4;
+    if (t < 1.6) return [(t / 1.6 - 0.5) * 2 * hx, hz];
+    if (t < 2.8) return [-hx, ((t - 1.6) / 1.2 - 0.5) * 2 * hz];
+    return [hx, ((t - 2.8) / 1.2 - 0.5) * 2 * hz];
+  };
+  const spilled = (item: string, scale = 1) => { const [x, z] = spill(); place(item, x, 0.01, z, undefined, scale * (0.9 + rnd() * 0.4)); };
+  // candles: rings round the front of the stone, a few melted shorter
+  for (let i = 0, k = n('candle'); i < k; i++) {
+    if (i >= ON_GRAVE) { spilled('candle'); continue; }
+    const ring = Math.floor(i / 6), slot = i % 6, r = 0.32 + ring * 0.16;
+    const ang = Math.PI * (0.12 + 0.76 * (slot + (ring % 2) * 0.5) / 6);
+    place('candle', Math.cos(ang) * r * 1.6 - 0, floor, zFront + Math.sin(ang) * r * 0.9, 0, 0.75 + rnd() * 0.5);
+  }
+  // flowers: a bed of bunches over the grave
+  for (let i = 0, k = n('flowers'); i < k; i++) {
+    if (i >= ON_GRAVE) { spilled('flowers'); continue; }
+    place('flowers', (rnd() - 0.5) * 1.05, floor, zFront + 0.3 + rnd() * (zEdge - zFront - 0.4), undefined, 0.85 + rnd() * 0.4);
+  }
+  // instant noodles: towers of cups on the sides, up to 5 high
+  for (let i = 0, k = n('noodles'); i < k; i++) {
+    if (i >= ON_GRAVE) { spilled('noodles'); continue; }
+    const tower = Math.floor(i / 5), level = i % 5, side = tower % 2 ? 1 : -1;
+    place('noodles', side * (0.6 - (rnd() * 0.04)), floor + level * 0.105, zFront + 0.35 + Math.floor(tower / 2) * 0.16, rnd() * 0.4);
+  }
+  // rugs: one growing heap, each rug a little twisted on top of the last
+  for (let i = 0, k = n('rug'); i < k; i++) {
+    if (i >= ON_GRAVE) { spilled('rug', 1.2); continue; }
+    place('rug', -0.32 + (rnd() - 0.5) * 0.06, floor + i * 0.014, zEdge - 0.2 + (rnd() - 0.5) * 0.06, (rnd() - 0.5) * 1.2, 1.2);
+  }
+  // diamond hands: scattered, some sitting higher like they float
+  for (let i = 0, k = n('diamond'); i < k; i++) {
+    if (i >= ON_GRAVE) { spilled('diamond'); continue; }
+    place('diamond', (rnd() - 0.5) * 1.1, floor + (rnd() < 0.3 ? 0.08 : 0), zFront + 0.25 + rnd() * (zEdge - zFront - 0.3), undefined, 0.8 + rnd() * 0.5);
+  }
+  // copium tanks: lined up along the front edge, then a second row
+  for (let i = 0, k = n('copium'); i < k; i++) {
+    if (i >= ON_GRAVE) { spilled('copium'); continue; }
+    const row = Math.floor(i / 7), col = i % 7;
+    place('copium', -0.6 + col * 0.2 + (row % 2) * 0.1, floor, zEdge - 0.04 - row * 0.15, rnd() * 0.6 - 0.3);
+  }
+
+  // merge everything into one mesh per material
+  tmp.updateMatrixWorld(true);
+  const buckets = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  tmp.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    const geo = (o.geometry as THREE.BufferGeometry).clone().applyMatrix4(o.matrixWorld);
+    o.geometry.dispose();
+    const mat = o.material as THREE.Material;
+    (buckets.get(mat) ?? buckets.set(mat, []).get(mat)!).push(geo);
   });
+  for (const [mat, geos] of buckets) {
+    const mesh = new THREE.Mesh(merge(geos), mat);
+    mesh.castShadow = true;
+    root.add(mesh);
+    for (const gg of geos) gg.dispose();
+  }
 }
 
 function offeringProp(item: string, m: ReturnType<typeof makeMaterials>): THREE.Group | null {

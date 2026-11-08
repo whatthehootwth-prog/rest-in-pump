@@ -11,7 +11,7 @@ const out = 'client/public/docs';
 mkdirSync(out, { recursive: true });
 
 const sample = (offerings: number): GraveInfo => ({
-  id: 1, plot: 7, message: '', creator: 'example.near', createdAt: 0, offerings, level: levelFor(offerings), recentItems: [],
+  id: 1, plot: 7, message: '', creator: 'example.near', createdAt: 0, offerings, level: levelFor(offerings), recentItems: [], itemCounts: {},
   meme: { chain: 'near', contract: 'rug.example.near', name: 'Rug Pull', symbol: 'RUG', decimals: 18, icon: null },
 });
 [[1, 3], [2, 42], [3, 420], [4, 4200]].forEach(([lvl, n]) => writeFileSync(`${out}/level-${lvl}.svg`, memorialSvg(sample(n))));

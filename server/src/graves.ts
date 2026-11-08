@@ -98,8 +98,8 @@ export class GraveService {
 
   snapshot(): GravesSnapshot {
     const rows = this.d.db.prepare('SELECT * FROM graves ORDER BY id').all() as unknown as GraveRow[];
-    const recent = this.recentItems(null);
-    return { graves: rows.map((r) => graveInfo(r, recent.get(r.id) ?? [])), reserved: this.reservedPlots() };
+    const recent = this.recentItems(null), counts = this.itemCounts(null);
+    return { graves: rows.map((r) => graveInfo(r, recent.get(r.id) ?? [], counts.get(r.id) ?? {})), reserved: this.reservedPlots() };
   }
 
   reservedPlots(): number[] {
@@ -109,7 +109,7 @@ export class GraveService {
 
   grave(id: number): GraveInfo | null {
     const row = this.d.db.prepare('SELECT * FROM graves WHERE id = ?').get(id) as GraveRow | undefined;
-    return row ? graveInfo(row, this.recentItems(id).get(id) ?? []) : null;
+    return row ? graveInfo(row, this.recentItems(id).get(id) ?? [], this.itemCounts(id).get(id) ?? {}) : null;
   }
 
   graveByContract(chain: ChainId, contract: string): GraveInfo | null {
@@ -414,6 +414,19 @@ export class GraveService {
   }
 
   /** Newest offering items per grave (all graves when id is null). */
+  /** Offerings per item per grave (all graves when id is null). */
+  private itemCounts(id: number | null): Map<number, Record<string, number>> {
+    const rows = this.d.db.prepare(`SELECT grave_id, item, COUNT(*) AS n FROM offerings ${id === null ? '' : 'WHERE grave_id = ?'} GROUP BY grave_id, item`)
+      .all(...(id === null ? [] : [id])) as { grave_id: number; item: string; n: number }[];
+    const out = new Map<number, Record<string, number>>();
+    for (const r of rows) {
+      const m = out.get(r.grave_id) ?? {};
+      m[r.item] = r.n;
+      out.set(r.grave_id, m);
+    }
+    return out;
+  }
+
   private recentItems(id: number | null): Map<number, string[]> {
     const rows = this.d.db.prepare(`SELECT grave_id, item FROM (
         SELECT grave_id, item, id, ROW_NUMBER() OVER (PARTITION BY grave_id ORDER BY id DESC) AS rn FROM offerings ${id === null ? '' : 'WHERE grave_id = ?'}
@@ -464,10 +477,10 @@ function memeInfo(chain: ChainId, contract: string, m: FtMetadata): MemeInfo {
   return { chain, contract, name: m.name, symbol: m.symbol, decimals: m.decimals, icon: m.icon };
 }
 
-function graveInfo(r: GraveRow, recentItems: string[]): GraveInfo {
+function graveInfo(r: GraveRow, recentItems: string[], itemCounts: Record<string, number>): GraveInfo {
   return {
     id: r.id, plot: r.plot, message: r.message, creator: r.creator, createdAt: r.created_at,
-    offerings: r.offering_count, level: levelFor(r.offering_count), recentItems,
+    offerings: r.offering_count, level: levelFor(r.offering_count), recentItems, itemCounts,
     meme: { chain: r.chain as ChainId, contract: r.contract, name: r.name, symbol: r.symbol, decimals: r.decimals, icon: r.icon },
   };
 }

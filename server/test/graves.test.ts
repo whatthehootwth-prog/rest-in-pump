@@ -221,13 +221,13 @@ describe('offerings', () => {
     const first = await offer(g.id, 'bob.near');
     expect(first.status).toBe('fulfilled');
     expect(first.memorial).toMatchObject({ graveId: g.id, account: 'bob.near', status: 'pending', tokenId: null });
-    expect(first.grave).toMatchObject({ offerings: 1, level: 1, recentItems: ['candle'] });
+    expect(first.grave).toMatchObject({ offerings: 1, level: 1, recentItems: ['candle'], itemCounts: { candle: 1 } });
     await offer(g.id, 'bob.near', { item: 'rug', amount: '0.05' });
     await offer(g.id, 'carol.near', { item: 'flowers' });
     expect(queued).toBe(2);   // bob once, carol once
     expect(db.prepare('SELECT account_id FROM memorials ORDER BY account_id').all().map((r) => (r as { account_id: string }).account_id)).toEqual(['bob.near', 'carol.near']);
     const d = ok(svc.detail(g.id, 'bob.near')) as GraveDetail;
-    expect(d).toMatchObject({ grave: { offerings: 3, recentItems: ['flowers', 'rug', 'candle'] }, memorials: 2, myOfferings: 2, mine: { status: 'pending' } });
+    expect(d).toMatchObject({ grave: { offerings: 3, recentItems: ['flowers', 'rug', 'candle'], itemCounts: { candle: 1, rug: 1, flowers: 1 } }, memorials: 2, myOfferings: 2, mine: { status: 'pending' } });
     expect(d.recent[0]).toMatchObject({ item: 'flowers', payer: 'carol.near' });
     expect(updates.map((u) => u.grave.offerings)).toEqual([1, 2, 3]);
   });
@@ -362,7 +362,7 @@ describe('memorial minting', () => {
 
 describe('memorial artwork', () => {
   const grave = (offerings: number, over: Partial<GraveInfo['meme']> = {}): GraveInfo => ({
-    id: 3, plot: 3, message: 'm', creator: 'a.near', createdAt: 0, offerings, level: levelFor(offerings), recentItems: [],
+    id: 3, plot: 3, message: 'm', creator: 'a.near', createdAt: 0, offerings, level: levelFor(offerings), recentItems: [], itemCounts: {},
     meme: { chain: 'near', contract: 'rug.near', name: 'Rug', symbol: 'RUG', decimals: 18, icon: null, ...over },
   });
 

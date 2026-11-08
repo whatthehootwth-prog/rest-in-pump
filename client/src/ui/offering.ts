@@ -241,6 +241,7 @@ export function graveSummary(g: GraveInfo): Node {
   const next = nextLevelIn(g.offerings);
   return h('div', { class: 'grave-sum' },
     memeChip(g.meme),
+    g.message ? h('blockquote', { class: 'last-words' }, g.message) : null,
     levelLine(g),
     next === null ? null : progress(g));
 }
