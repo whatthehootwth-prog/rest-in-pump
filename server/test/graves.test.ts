@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { openDb, type Db } from '../src/db.ts';
-import { GraveService, memoFor, parsePrice } from '../src/graves.ts';
+import { GraveService, trimNear } from '../src/graves.ts';
 import { MemorialMinter, describe as describeMemorial, type MemorialChain } from '../src/minter.ts';
 import { memorialSvg } from '../src/nft.ts';
 import type { MetadataResult, TransferCheck, TransferResult } from '../src/near.ts';
@@ -13,7 +13,11 @@ const META: Record<string, MetadataResult> = {
   'rug.near': { ok: true, meta: { name: 'Rug', symbol: 'RUG', decimals: 24, icon: null } },
   'nothing.near': { ok: false, code: 'not_found', message: 'No NEAR account with that address.' },
 };
-const WTH = 10n ** 18n;
+const NEAR = 10n ** 24n;
+const STEP = 10n ** 18n;          // 0.000001 NEAR
+let nearUsd: number | null = 2.5; // $2.50 per NEAR in these tests, so $0.01 = 0.004 NEAR
+/** The order amount is the base price plus a unique tail below 0.000001 NEAR. */
+const baseOf = (amount: string) => (BigInt(amount) / STEP) * STEP;
 
 let verifyResult: (c: TransferCheck) => TransferResult;
 let db: Db;
@@ -26,12 +30,12 @@ const H = (n: number) => String(n).padStart(6, '0').replace(/0/g, 'a') + 'H'.rep
 const nextTx = () => H(++txn);
 
 beforeEach(() => {
-  added = []; updates = []; queued = 0;
-  verifyResult = (c) => ({ status: 'ok', payer: c.signerId, amount: c.minAmount });
+  added = []; updates = []; queued = 0; nearUsd = 2.5;
+  verifyResult = (c) => ({ status: 'ok', payer: c.signerId, amount: c.amount });
   db = openDb(':memory:');
   svc = new GraveService({
-    db, log: silentLogger, token: TOKEN, receiver: TREASURY, decimals: 18,
-    gravePrice: parsePrice('GRAVE_PRICE_WTH', '75000', 18), offeringMin: parsePrice('OFFERING_MIN_WTH', '10000', 18),
+    db, log: silentLogger, receiver: TREASURY,
+    gravePriceUsd: '0.01', offeringMinUsd: '0.01', price: { usd: async () => nearUsd },
     holdMinutes: 15, nftContract: 'memorial.whatthehoot.near', mintingEnabled: true,
     lookupNear: async (c) => META[c] ?? { ok: false, code: 'not_token', message: 'nope' },
     verify: async (c) => verifyResult(c),
@@ -49,17 +53,19 @@ const makeGrave = async (creator = 'alice.near', over: Record<string, unknown> =
   return (ok(await svc.confirmPayment(p.id, nextTx(), creator, 2000)) as PaymentView).grave!;
 };
 const offer = async (graveId: number, payer: string, over: Record<string, unknown> = {}, ip = '5.5.5.5', now = 3000) => {
-  const p = ok(await svc.createOffering({ graveId, item: 'candle', amount: '10000', ...over }, ip, now)) as PaymentView;
+  const p = ok(await svc.createOffering({ graveId, item: 'candle', amount: '0.01', ...over }, ip, now)) as PaymentView;
   return ok(await svc.confirmPayment(p.id, nextTx(), payer, now + 1)) as PaymentView;
 };
 
 describe('graves', () => {
   it('creates a hold with the exact transfer to make, at one grave price', async () => {
     const p = ok(await create()) as PaymentView;
-    expect(p).toMatchObject({ kind: 'grave', status: 'pending', receiver: TREASURY, memo: memoFor(p.id), amount: (75000n * WTH).toString() });
+    expect(p).toMatchObject({ kind: 'grave', status: 'pending', receiver: TREASURY });
+    expect(baseOf(p.amount)).toBe(4n * NEAR / 1000n);                 // $0.01 at $2.50 = 0.004 NEAR
+    expect(BigInt(p.amount)).toBeGreaterThan(baseOf(p.amount));         // + a unique tail
     expect(p.meme).toMatchObject({ name: 'Dog Shit', symbol: 'DOGSHIT', icon: 'data:image/png;base64,AAAA' });
     expect(svc.snapshot().reserved).toEqual([1]);
-    expect(svc.config()).toMatchObject({ gravePrice: '75000', offeringMin: '10000', mintingEnabled: true });
+    expect(await svc.config()).toMatchObject({ currency: 'NEAR', gravePriceUsd: '0.01', offeringMinUsd: '0.01', nearUsd: 2.5, gravePrice: (4n * NEAR / 1000n).toString(), mintingEnabled: true });
   });
 
   it('validates input', async () => {
@@ -116,7 +122,7 @@ describe('graves', () => {
     const p = ok(await create()) as PaymentView;
     expect((ok(await svc.confirmPayment(p.id, H(1), 'alice.near', 2000)) as PaymentView).status).toBe('confirming');
     expect(svc.snapshot().reserved).toEqual([1]);
-    verifyResult = (c) => ({ status: 'ok', payer: c.signerId, amount: c.minAmount });
+    verifyResult = (c) => ({ status: 'ok', payer: c.signerId, amount: c.amount });
     await svc.sweep(5000);
     expect((svc.getPayment(p.id) as PaymentView).status).toBe('fulfilled');
   });
@@ -125,7 +131,7 @@ describe('graves', () => {
     verifyResult = () => ({ status: 'invalid', reason: 'The amount sent is less than the price.' });
     const p = ok(await create()) as PaymentView;
     expect(ok(await svc.confirmPayment(p.id, H(1), 'alice.near', 2000))).toMatchObject({ status: 'pending', txHash: null, error: 'The amount sent is less than the price.' });
-    verifyResult = (c) => ({ status: 'ok', payer: c.signerId, amount: c.minAmount });
+    verifyResult = (c) => ({ status: 'ok', payer: c.signerId, amount: c.amount });
     expect((ok(await svc.confirmPayment(p.id, H(2), 'alice.near', 2500)) as PaymentView).status).toBe('fulfilled');
   });
 
@@ -161,17 +167,51 @@ describe('graves', () => {
   });
 });
 
-describe('offerings', () => {
-  it('validates the grave, item and amount (minimum 10,000 WTH)', async () => {
+describe('NEAR pricing', () => {
+  it('every order gets a unique exact amount, so a plain transfer can be matched to it', async () => {
     const g = await makeGrave();
-    const o = (over: Record<string, unknown>) => svc.createOffering({ graveId: g.id, item: 'candle', amount: '10000', ...over }, '5.5.5.5', 3000);
+    const amounts = new Set<string>();
+    for (let i = 0; i < 3; i++) {
+      const p = ok(await svc.createOffering({ graveId: g.id, item: ['candle', 'rug', 'diamond'][i], amount: '0.01' }, `7.7.7.${i}`, 3000)) as PaymentView;
+      amounts.add(p.amount);
+      expect(baseOf(p.amount)).toBe(NEAR / 100n);
+    }
+    expect(amounts.size).toBe(3);
+  });
+
+  it('pauses orders with a clear message when no NEAR price is available', async () => {
+    nearUsd = null;
+    expect(await create()).toMatchObject({ code: 'price_unavailable', status: 503 });
+    expect(await svc.config()).toMatchObject({ nearUsd: null, gravePrice: null, offeringMin: null });
+  });
+
+  it('allows a 3% price move between showing the minimum and ordering', async () => {
+    const g = await makeGrave();
+    nearUsd = 2.45;   // $0.01 is now ~0.004082 NEAR; 0.004 is within 3%
+    ok(await svc.createOffering({ graveId: g.id, item: 'candle', amount: '0.004' }, '8.8.8.8', 3000));
+    nearUsd = 2.0;    // $0.01 is now 0.005 NEAR; 0.004 is 20% short
+    expect(await svc.createOffering({ graveId: g.id, item: 'rug', amount: '0.004' }, '8.8.8.9', 3000)).toMatchObject({ code: 'amount_too_low' });
+  });
+
+  it('formats NEAR amounts', () => {
+    expect(trimNear(4n * NEAR / 1000n)).toBe('0.004');
+    expect(trimNear(NEAR)).toBe('1');
+  });
+});
+
+describe('offerings', () => {
+  it('validates the grave, item and amount (minimum $0.01 in NEAR)', async () => {
+    const g = await makeGrave();
+    const o = (over: Record<string, unknown>) => svc.createOffering({ graveId: g.id, item: 'candle', amount: '0.01', ...over }, '5.5.5.5', 3000);
     expect(await o({ graveId: 99 })).toMatchObject({ code: 'not_found' });
     expect(await o({ item: 'lambo' })).toMatchObject({ code: 'bad_item' });
-    expect(await o({ amount: '9999.99' })).toMatchObject({ code: 'amount_too_low' });
+    expect(await o({ amount: '0.003' })).toMatchObject({ code: 'amount_too_low' });
+    expect(await o({ amount: '0.0001234567' })).toMatchObject({ code: 'bad_amount' });   // more than 6 decimals
     expect(await o({ amount: 'lots' })).toMatchObject({ code: 'bad_amount' });
-    expect(await o({ amount: 10000 })).toMatchObject({ code: 'bad_amount' });
-    const p = ok(await o({ amount: '12500.5', item: 'copium' })) as PaymentView;
-    expect(p).toMatchObject({ kind: 'offering', status: 'pending', graveId: g.id, item: 'copium', amount: (125005n * WTH / 10n).toString(), plot: 1 });
+    expect(await o({ amount: 0.01 })).toMatchObject({ code: 'bad_amount' });
+    const p = ok(await o({ amount: '0.0125', item: 'copium' })) as PaymentView;
+    expect(p).toMatchObject({ kind: 'offering', status: 'pending', graveId: g.id, item: 'copium', plot: 1 });
+    expect(baseOf(p.amount)).toBe(125n * NEAR / 10000n);
     // offerings never hold a plot
     expect(svc.snapshot().reserved).toEqual([]);
   });
@@ -182,7 +222,7 @@ describe('offerings', () => {
     expect(first.status).toBe('fulfilled');
     expect(first.memorial).toMatchObject({ graveId: g.id, account: 'bob.near', status: 'pending', tokenId: null });
     expect(first.grave).toMatchObject({ offerings: 1, level: 1, recentItems: ['candle'] });
-    await offer(g.id, 'bob.near', { item: 'rug', amount: '50000' });
+    await offer(g.id, 'bob.near', { item: 'rug', amount: '0.05' });
     await offer(g.id, 'carol.near', { item: 'flowers' });
     expect(queued).toBe(2);   // bob once, carol once
     expect(db.prepare('SELECT account_id FROM memorials ORDER BY account_id').all().map((r) => (r as { account_id: string }).account_id)).toEqual(['bob.near', 'carol.near']);
@@ -201,16 +241,16 @@ describe('offerings', () => {
 
   it('never counts repeated confirmations, failed transactions or reused transactions', async () => {
     const g = await makeGrave();
-    const p = ok(await svc.createOffering({ graveId: g.id, item: 'candle', amount: '10000' }, '5.5.5.5', 3000)) as PaymentView;
+    const p = ok(await svc.createOffering({ graveId: g.id, item: 'candle', amount: '0.01' }, '5.5.5.5', 3000)) as PaymentView;
     verifyResult = () => ({ status: 'invalid', reason: 'That transaction failed on NEAR.' });
     expect(ok(await svc.confirmPayment(p.id, H(900), 'bob.near', 3001))).toMatchObject({ status: 'pending', error: 'That transaction failed on NEAR.' });
     expect(svc.grave(g.id)!.offerings).toBe(0);
-    verifyResult = (c) => ({ status: 'ok', payer: c.signerId, amount: c.minAmount });
+    verifyResult = (c) => ({ status: 'ok', payer: c.signerId, amount: c.amount });
     ok(await svc.confirmPayment(p.id, H(901), 'bob.near', 3002));
     ok(await svc.confirmPayment(p.id, H(901), 'bob.near', 3003));
     await svc.sweep(3004);
     expect(svc.grave(g.id)!.offerings).toBe(1);
-    const p2 = ok(await svc.createOffering({ graveId: g.id, item: 'rug', amount: '10000' }, '5.5.5.5', 3005)) as PaymentView;
+    const p2 = ok(await svc.createOffering({ graveId: g.id, item: 'rug', amount: '0.01' }, '5.5.5.5', 3005)) as PaymentView;
     expect(await svc.confirmPayment(p2.id, H(901), 'bob.near', 3006)).toMatchObject({ code: 'tx_used' });
     expect(svc.grave(g.id)!.offerings).toBe(1);
     expect(db.prepare('SELECT COUNT(*) AS n FROM offerings').get()).toMatchObject({ n: 1 });
@@ -218,21 +258,21 @@ describe('offerings', () => {
 
   it('the NFT goes to the wallet that actually paid (verified signer)', async () => {
     const g = await makeGrave();
-    verifyResult = () => ({ status: 'ok', payer: 'realpayer.near', amount: 10000n * WTH });
+    verifyResult = (c) => ({ status: 'ok', payer: 'realpayer.near', amount: c.amount });
     const p = await offer(g.id, 'realpayer.near');
     expect(p.memorial?.account).toBe('realpayer.near');
   });
 
   it('resumes the same open offering and limits open offerings per visitor', async () => {
     const g = await makeGrave();
-    const a = ok(await svc.createOffering({ graveId: g.id, item: 'candle', amount: '10000' }, '5.5.5.5', 3000)) as PaymentView;
-    const b = ok(await svc.createOffering({ graveId: g.id, item: 'candle', amount: '10000' }, '5.5.5.5', 3000)) as PaymentView;
+    const a = ok(await svc.createOffering({ graveId: g.id, item: 'candle', amount: '0.01' }, '5.5.5.5', 3000)) as PaymentView;
+    const b = ok(await svc.createOffering({ graveId: g.id, item: 'candle', amount: '0.01' }, '5.5.5.5', 3000)) as PaymentView;
     expect(b.id).toBe(a.id);
-    ok(await svc.createOffering({ graveId: g.id, item: 'rug', amount: '10000' }, '5.5.5.5', 3000));
-    ok(await svc.createOffering({ graveId: g.id, item: 'diamond', amount: '10000' }, '5.5.5.5', 3000));
-    expect(await svc.createOffering({ graveId: g.id, item: 'noodles', amount: '10000' }, '5.5.5.5', 3000)).toMatchObject({ code: 'too_many_open' });
+    ok(await svc.createOffering({ graveId: g.id, item: 'rug', amount: '0.01' }, '5.5.5.5', 3000));
+    ok(await svc.createOffering({ graveId: g.id, item: 'diamond', amount: '0.01' }, '5.5.5.5', 3000));
+    expect(await svc.createOffering({ graveId: g.id, item: 'noodles', amount: '0.01' }, '5.5.5.5', 3000)).toMatchObject({ code: 'too_many_open' });
     svc.cancelPayment(a.id, 3100);
-    ok(await svc.createOffering({ graveId: g.id, item: 'noodles', amount: '10000' }, '5.5.5.5', 3200));
+    ok(await svc.createOffering({ graveId: g.id, item: 'noodles', amount: '0.01' }, '5.5.5.5', 3200));
   });
 
   it('reaches the memorial levels at 10, 100 and 1000 offerings', async () => {

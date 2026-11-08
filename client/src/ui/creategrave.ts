@@ -1,5 +1,5 @@
 import {
-  CHAINS, GRAVE_LEVELS, MESSAGE_MAX, NEAR_ACCOUNT_RE, formatUnits, parseUnits, sanitizeMessage,
+  CHAINS, GRAVE_LEVELS, MESSAGE_MAX, NEAR_ACCOUNT_RE, nearLabel, sanitizeMessage, usdLabel,
   type ChainId, type GraveInfo, type MemeInfo, type PaymentView, type PriceConfig,
 } from '../../../shared/graves.ts';
 import { api } from '../net/api.ts';
@@ -12,7 +12,7 @@ type Lookup =
   | { s: 'exists'; meme: MemeInfo; grave: GraveInfo } | { s: 'ok'; meme: MemeInfo };
 
 /**
- * "Create a grave": meme contract → last words → send the grave price in WTH → a level-1 grave on the plot.
+ * "Create a grave": meme contract → last words → send the grave price in NEAR → a level-1 grave on the plot.
  * Creating a grave does not mint an NFT; memorials come from offerings (the creator can make one too).
  */
 export class CreateGraveDialog {
@@ -171,14 +171,17 @@ export class CreateGraveDialog {
         ? h('p', { class: 'status bad' }, `Could not load prices: ${this.configError}`)
         : h('p', { class: 'status busy' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Loading prices…'));
     }
-    const amount = this.flow.payment?.amount ?? parseUnits(cfg.gravePrice, cfg.decimals).toString();
-    const price = `${formatUnits(amount, cfg.decimals)} WTH`;
+    const amount = this.flow.payment?.amount ?? cfg.gravePrice;
+    if (!amount || !cfg.nearUsd) {
+      return h('div', { class: 'dlg-step' }, h('p', { class: 'status bad' }, 'Could not get the NEAR price right now, so graves are paused for a moment. Try again in a minute.'));
+    }
+    const price = nearLabel(amount);
     const acct = this.wallet.account;
     const summary = h('dl', { class: 'summary' },
       h('dt', {}, 'Meme'), h('dd', {}, meme ? `${meme.name} ($${meme.symbol})` : '—'),
       h('dt', {}, 'Plot'), h('dd', {}, `#${this.plot}`),
       h('dt', {}, 'Last words'), h('dd', {}, `“${this.message}”`),
-      h('dt', {}, 'Price'), h('dd', {}, h('b', {}, price)),
+      h('dt', {}, 'Price'), h('dd', {}, h('b', {}, price), ` (about ${usdLabel(amount, cfg.nearUsd)})`),
       h('dt', {}, 'Goes to'), h('dd', { class: 'mono' }, cfg.receiver),
       h('dt', {}, 'Wallet'), h('dd', {}, acct ? shortAccount(acct) : 'not connected'));
     return h('div', { class: 'dlg-step' }, summary,

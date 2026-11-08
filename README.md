@@ -8,7 +8,7 @@ A multiplayer cartoon graveyard. Players walk around as the owl mascot and see e
 |---|---|
 | 3D world + owl character | Done (ported from the prototype, unchanged look) |
 | Multiplayer (rooms, sync, reconnect) | **Done — phase 1** (see "What is verified") |
-| Graves: create a grave for a meme on an empty plot, paid in WTH, verified on NEAR | **Built** — server tested; a real-wallet payment has not been made through the game yet |
+| Graves: create a grave for a meme on an empty plot, paid in NEAR ($0.01 at the live price), verified on chain | **Built** — server tested; a real-wallet payment has not been made through the game yet |
 | Offerings, memorial levels (graves evolve with the community offering count) | **Built** — same payment flow, server + browser tested |
 | Memorial NFTs (NEP-171 contract + server minter + live metadata/artwork) | **Built, not deployed** — contract tested as compiled wasm; deploy to `memorial.whatthehoot.near` is yours (below) |
 | Grave search, memes on other chains (Solana / Base / Ethereum) | Not started |
@@ -114,14 +114,14 @@ TODO.md                roadmap checklist
 - 40 plots (5 rows x 8, `shared/graves.ts`). Walking up to one highlights the whole plot; **E** opens "Create a grave".
 - The player pastes a NEAR token contract; the server reads name, symbol and logo with `ft_metadata`. Only inline
   `data:` logos are shown (remote image URLs are ignored for safety).
-- One price for every grave (`GRAVE_PRICE_WTH`, a fixed WTH amount — update it when the WTH price moves). Last words:
+- One price for every grave in USD (`GRAVE_PRICE_USD`, default $0.01), paid in NEAR at the live NEAR price. Last words:
   1–100 characters. One grave per meme contract, ever. Graves cannot be removed.
 - Creating a grave does **not** mint an NFT. The creator gets a memorial by making an offering like anyone else.
 
 **Offerings**
 - At a grave, **E** opens "Leave an offering": a funny item (candle, flowers, instant noodles, a rug, diamond hands,
-  copium tank) plus any WTH amount of at least `OFFERING_MIN_WTH` (10,000).
-- The grave's **community offering count** is the number of successful offerings — not WTH spent. Each verified
+  copium tank) plus any NEAR amount worth at least `OFFERING_MIN_USD` (default $0.01).
+- The grave's **community offering count** is the number of successful offerings — not NEAR spent. Each verified
   payment adds exactly one (one payment row → at most one offering row, enforced by a unique key). Failed,
   underpaid, reused or repeated confirmations never count.
 - Levels: 1 Forgotten Grave (0–9), 2 Remembered (10–99), 3 Honored (100–999), 4 Legendary (1,000+). The tombstone in
@@ -129,11 +129,16 @@ TODO.md                roadmap checklist
   offerings are laid in front of it. Changes are pushed live to everyone (`grave_updated`).
 
 **Payments (graves and offerings)**
-- The server creates the payment and returns the exact transfer. A grave payment also **holds** the plot and the meme
-  for `HOLD_MINUTES`. The player sends an `ft_transfer` of WTH to `TREASURY_ACCOUNT` with memo `rip:<paymentId>`
-  from their own wallet. The server verifies the NEP-141 `ft_transfer` event on NEAR (token, receiver, sender,
-  memo, amount, final and successful), then creates the grave / records the offering in one database transaction.
-  A transaction hash can only ever be used once.
+- Prices are set in USD and paid in **NEAR**. The server converts at the live NEAR/USD price (CoinGecko, then
+  Coinbase, Kraken, Binance; cached for a minute). If no source has answered for 15 minutes, new orders pause with a
+  clear message instead of charging a guessed amount. Amounts are rounded up to 0.000001 NEAR.
+- The server creates the order and returns the exact amount. A grave order also **holds** the plot and the meme for
+  `HOLD_MINUTES`. The player's wallet sends a plain NEAR transfer to `TREASURY_ACCOUNT`.
+- A plain transfer can't carry a memo, so every order gets a **unique exact amount**: the price plus a random tail
+  under 0.000001 NEAR. The server checks on chain that the transaction is final and successful, signed by the
+  player, sent to the treasury, for exactly that amount, and made after the order was created. Then it creates the
+  grave / records the offering in one database transaction. A transaction hash can only ever be used once, and a
+  transfer can't be claimed by someone else's order (the amounts differ).
 - A background job (every 15 s) expires unpaid holds and re-checks payments whose verification was interrupted.
 - **Refunds are manual.** If a valid grave payment arrives after its hold expired *and* someone else took the plot
   or the meme meanwhile, it is marked `unfulfillable` and logged at error level (`PAID BUT UNFULFILLABLE`).
@@ -187,12 +192,12 @@ build you can use `cargo near build` instead.
   memorials and payments are in SQLite (`DB_PATH`, default `data/rip.sqlite`) and survive restarts. Put it on a
   persistent disk and back it up.
 - The payment verifier is tested against NEAR's documented response format, not yet against a real payment made
-  through the game. Make one small real offering (10,000 WTH) before launch.
+  through the game. Make one small real offering ($0.01 in NEAR) before launch.
 - The Memorial NFT contract is tested by running the compiled wasm against a mocked NEAR host (`contract.test.ts`),
   and the minter against a fake chain. It has not been deployed yet; run the testnet trial above first.
 - Memorial metadata is served by this game server; if it is down, wallets can't load the artwork/attributes
   (the on-chain title, owner and transfer history are unaffected).
-- WTH trades on a thin pool; fixed prices avoid manipulation but must be updated by hand.
+- Prices depend on public NEAR/USD feeds; a wrong feed would mis-price orders (the server rejects prices outside $0.01–$10,000).
 - One server process. Horizontal scaling would need sticky sessions or a shared room service.
 - Movement is client-predicted; the server limits speed and bounds but does not check collisions with
   gravestones, so a modified client can walk through scenery (not through the world edge).

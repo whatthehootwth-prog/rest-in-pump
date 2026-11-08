@@ -21,14 +21,11 @@ export interface Config {
   /** SQLite file for graves and payments. */
   dbPath: string;
   nearRpcUrls: string[];
-  /** NEP-141 token used for payments, and the account that receives them. */
-  wthContract: string;
-  wthDecimals: number;
+  /** Account that receives the NEAR for graves and offerings. */
   treasury: string;
-  /** Whole-WTH price to create a grave. */
-  gravePriceWth: string;
-  /** Minimum whole-WTH amount per offering. */
-  offeringMinWth: string;
+  /** USD price to create a grave, and the minimum offering in USD (paid in NEAR at the live price). */
+  gravePriceUsd: string;
+  offeringMinUsd: string;
   /** How long a plot + meme stay reserved (and an offering stays open) while the player pays. */
   holdMinutes: number;
   /** Memorial NFTs. Minting runs only when all three are set; otherwise memorials queue until it is. */
@@ -58,7 +55,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (!['debug', 'info', 'warn', 'error'].includes(level)) throw new Error(`Invalid LOG_LEVEL="${env.LOG_LEVEL}"`);
   // the built client (npm run build). Set STATIC_DIR="" to disable, e.g. when a CDN serves the files.
   const staticDir = env.STATIC_DIR === undefined ? 'dist/client' : env.STATIC_DIR || null;
-  if (env.GRAVE_PRICES_WTH) throw new Error('GRAVE_PRICES_WTH was replaced by GRAVE_PRICE_WTH (one price; graves now evolve with offerings)');
+  for (const old of ['GRAVE_PRICES_WTH', 'GRAVE_PRICE_WTH', 'OFFERING_MIN_WTH', 'WTH_CONTRACT', 'WTH_DECIMALS']) {
+    if (env[old]) throw new Error(`${old} is no longer used: graves and offerings are paid in NEAR (set GRAVE_PRICE_USD / OFFERING_MIN_USD)`);
+  }
+  const usd = (key: string, def: string) => {
+    const v = (env[key] ?? def).trim();
+    if (!/^\d{1,9}(\.\d{1,6})?$/.test(v) || Number(v) <= 0) throw new Error(`${key} must be a positive USD amount like 0.01`);
+    return v;
+  };
   const opt = (key: string) => (env[key] ?? '').trim() || null;
   const nftContract = opt('NFT_CONTRACT'), minterAccountId = opt('MINTER_ACCOUNT_ID'), minterPrivateKey = opt('MINTER_PRIVATE_KEY');
   const publicBaseUrl = opt('PUBLIC_BASE_URL')?.replace(/\/+$/, '') ?? null;
@@ -83,11 +87,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     trustProxy: env.TRUST_PROXY === '1',
     dbPath: env.DB_PATH ?? 'data/rip.sqlite',
     nearRpcUrls: (env.NEAR_RPC_URLS ?? 'https://rpc.mainnet.fastnear.com,https://free.rpc.fastnear.com,https://rpc.mainnet.near.org').split(',').map((s) => s.trim()).filter(Boolean),
-    wthContract: env.WTH_CONTRACT ?? 'wth-0b2227.launchpad.justhoot.near',
-    wthDecimals: int(env, 'WTH_DECIMALS', 18, 0, 40),
     treasury: env.TREASURY_ACCOUNT ?? 'whatthehoot.near',
-    gravePriceWth: env.GRAVE_PRICE_WTH ?? '75000',
-    offeringMinWth: env.OFFERING_MIN_WTH ?? '10000',
+    gravePriceUsd: usd('GRAVE_PRICE_USD', '0.01'),
+    offeringMinUsd: usd('OFFERING_MIN_USD', '0.01'),
     holdMinutes: int(env, 'HOLD_MINUTES', 15, 1, 120),
     nftContract, minterAccountId, minterPrivateKey, publicBaseUrl,
   };

@@ -7,12 +7,13 @@ import type { Config } from './config.ts';
 import type { Logger } from './log.ts';
 import { RoomManager, type Player } from './rooms.ts';
 import { openDb, type Db } from './db.ts';
-import { GraveService, parsePrice } from './graves.ts';
+import { GraveService } from './graves.ts';
+import { createNearPrice, type NearPrice } from './price.ts';
 import { createApi } from './api.ts';
 import { MemorialMinter, nearMemorialChain, type MemorialChain } from './minter.ts';
 import { createNftRoutes } from './nft.ts';
 import { sillyName } from './names.ts';
-import { createNearRpc, fetchFtMetadata, verifyFtTransfer, viewFunction, type MetadataResult, type TransferCheck, type TransferResult } from './near.ts';
+import { createNearRpc, fetchFtMetadata, nearBalance, verifyNearTransfer, type MetadataResult, type TransferCheck, type TransferResult } from './near.ts';
 import {
   MAX_CLIENT_MESSAGE_BYTES, PROTOCOL_VERSION, parseClientMessage, sanitizeChat,
   type ClientMessage, type ErrorCode, type ServerMessage, type SnapshotEntry,
@@ -42,6 +43,10 @@ export interface GameServer {
 export interface ServerOptions {
   near?: { lookup(contract: string): Promise<MetadataResult>; verify(c: TransferCheck): Promise<TransferResult> };
   db?: Db;
+  /** Replaces the live NEAR/USD price. */
+  price?: NearPrice;
+  /** Replaces the NEAR balance lookup. */
+  balance?: (account: string) => Promise<string | null>;
   /** Replaces the Memorial NFT contract (turns minting on with minter id "minter.test"). */
   memorialChain?: MemorialChain;
 }
@@ -75,12 +80,12 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
     for (const c of clients) if (c.playerId && c.ws.readyState === WebSocket.OPEN) c.ws.send(data);
   };
   const graves = new GraveService({
-    db, log: log.child({ mod: 'graves' }), token: cfg.wthContract, receiver: cfg.treasury, decimals: cfg.wthDecimals,
-    gravePrice: parsePrice('GRAVE_PRICE_WTH', cfg.gravePriceWth, cfg.wthDecimals),
-    offeringMin: parsePrice('OFFERING_MIN_WTH', cfg.offeringMinWth, cfg.wthDecimals),
+    db, log: log.child({ mod: 'graves' }), receiver: cfg.treasury,
+    gravePriceUsd: cfg.gravePriceUsd, offeringMinUsd: cfg.offeringMinUsd,
+    price: opts.price ?? createNearPrice(undefined, (err) => log.warn('NEAR price source failed', { err: String((err as Error)?.message ?? err) })),
     holdMinutes: cfg.holdMinutes, nftContract: cfg.nftContract, mintingEnabled: mintingConfigured || !!opts.memorialChain,
     lookupNear: opts.near?.lookup ?? ((contract) => fetchFtMetadata(rpc, contract)),
-    verify: opts.near?.verify ?? ((check) => verifyFtTransfer(rpc, check)),
+    verify: opts.near?.verify ?? ((check) => verifyNearTransfer(rpc, check)),
     onGraveAdded: (grave) => broadcastAll({ t: 'grave_added', grave }),
     onReservedChanged: (reserved) => broadcastAll({ t: 'plots_reserved', reserved }),
     onGraveUpdated: (grave, offering) => broadcastAll({ t: 'grave_updated', grave, offering }),
@@ -98,10 +103,7 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
   const nft = createNftRoutes(graves, log.child({ mod: 'nft' }), cfg.publicBaseUrl, cfg.nftContract);
   const clientIp = (req: http.IncomingMessage) =>
     (cfg.trustProxy ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0]?.trim() : '') || req.socket.remoteAddress || '?';
-  const api = createApi(graves, log.child({ mod: 'api' }), clientIp, async (account) => {
-    const r = await viewFunction(rpc, cfg.wthContract, 'ft_balance_of', { account_id: account });
-    return 'value' in r && typeof r.value === 'string' ? r.value : null;
-  });
+  const api = createApi(graves, log.child({ mod: 'api' }), clientIp, opts.balance ?? ((account) => nearBalance(rpc, account)));
   const clients = new Set<Client>();
   const byPlayer = new Map<string, Client>();
   const dirtyRooms = new Set<string>();

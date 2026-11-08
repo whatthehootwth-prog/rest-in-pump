@@ -188,8 +188,9 @@ describe('game server', () => {
     const port = await boot({ PUBLIC_BASE_URL: 'https://rip.example' }, {
       near: {
         lookup: async () => ({ ok: true, meta: { name: 'Dog Shit', symbol: 'DOGSHIT', decimals: 18, icon: null } }),
-        verify: async (c) => ({ status: 'ok', payer: c.signerId, amount: c.minAmount }),
+        verify: async (c) => ({ status: 'ok', payer: c.signerId, amount: c.amount }),
       },
+      price: { usd: async () => 2.5 },
       memorialChain: {
         minterOf: async () => 'minter.test',
         memorialOf: async (g, a) => (minted.includes(`${g}:${a}`) ? `${g}-1` : null),
@@ -202,7 +203,7 @@ describe('game server', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const json = async (r: Response): Promise<any> => r.json();
     const post = (path: string, body: unknown) => fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    expect(await json(await fetch(base + '/config'))).toMatchObject({ gravePrice: '75000', offeringMin: '10000', mintingEnabled: true });
+    expect(await json(await fetch(base + '/config'))).toMatchObject({ currency: 'NEAR', gravePriceUsd: '0.01', nearUsd: 2.5, gravePrice: '4000000000000000000000', mintingEnabled: true });
     const created = await post('/payments', { plot: 7, chain: 'near', contract: 'dogshit.near', message: 'rip bozo' });
     expect(created.status).toBe(201);
     const pay = await json(created);
@@ -216,9 +217,9 @@ describe('game server', () => {
     expect((await json(dup)).error.code).toBe('grave_exists');
 
     // an offering
-    const low = await post('/offerings', { graveId: grave.id, item: 'candle', amount: '10' });
+    const low = await post('/offerings', { graveId: grave.id, item: 'candle', amount: '0.0001' });
     expect((await json(low)).error.code).toBe('amount_too_low');
-    const off = await json(await post('/offerings', { graveId: grave.id, item: 'copium', amount: '10000' }));
+    const off = await json(await post('/offerings', { graveId: grave.id, item: 'copium', amount: '0.01' }));
     expect(off).toMatchObject({ kind: 'offering', status: 'pending', item: 'copium' });
     const paid = await json(await post(`/payments/${off.id}/confirm`, { txHash: '8FtHUFBQsZ2MG77K3x3MJ9wjX3UT8zE1TczCrhZEcG8U', accountId: 'bob.near' }));
     expect(paid).toMatchObject({ status: 'fulfilled', grave: { offerings: 1 } });

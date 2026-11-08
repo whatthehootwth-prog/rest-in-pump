@@ -45,15 +45,15 @@ export class Wallet {
     this.set(null);
   }
 
-  /** Sends an NEP-141 ft_transfer (1 yoctoNEAR deposit, as the standard requires). Returns the tx hash. */
-  async sendFtTransfer(p: { token: string; receiver: string; amount: string; memo: string }): Promise<string> {
+  /** Sends a plain NEAR transfer of exactly `amount` yoctoNEAR. Returns the tx hash. */
+  async sendNear(p: { receiver: string; amount: string }): Promise<string> {
     const { selector, actions } = await this.load();
     const wallet = await selector.wallet();
     let outcome: unknown;
     try {
       outcome = await wallet.signAndSendTransaction({
-        receiverId: p.token,
-        actions: [actions.functionCall('ft_transfer', { receiver_id: p.receiver, amount: p.amount, memo: p.memo }, 30_000_000_000_000n, 1n)],
+        receiverId: p.receiver,
+        actions: [actions.transfer(BigInt(p.amount))],
       });
     } catch (err) {
       const msg = String((err as Error)?.message ?? err);
@@ -84,7 +84,7 @@ export class Wallet {
         network: 'mainnet',
         modules: [mnw.setupMyNearWallet(), meteor.setupMeteorWallet(), here.setupHereWallet(), intear.setupIntearWallet()],
       });
-      const modal = ui.setupModal(selector, { theme: 'dark', description: 'Connect a NEAR wallet holding $WTH to create graves and leave offerings.' });
+      const modal = ui.setupModal(selector, { theme: 'dark', description: 'Connect a NEAR wallet to create graves and leave offerings.' });
       const read = () => selector.store.getState().accounts.find((a) => a.active)?.accountId ?? null;
       this.set(read());
       selector.store.observable.subscribe(() => this.set(read()));

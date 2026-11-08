@@ -3,7 +3,7 @@
  * exchanged by the API. Shared by client and server so both agree on ids, positions and limits.
  *
  * "Every offering keeps the memory alive." A grave represents a memecoin. Visitors leave paid offerings
- * in WTH; each successful offering adds one to the grave's community count, and the grave evolves at
+ * in NEAR; each successful offering adds one to the grave's community count, and the grave evolves at
  * milestones. A wallet's first successful offering to a grave earns it that grave's Memorial NFT, and all
  * memorials of a grave evolve with it. No staking, yield, rewards or token burning.
  */
@@ -108,13 +108,19 @@ export interface GraveInfo {
 }
 
 export interface PriceConfig {
-  token: string;
-  receiver: string;
+  currency: 'NEAR';
+  /** NEAR has 24 decimals (yoctoNEAR). */
   decimals: number;
-  /** Whole-WTH price to create a grave, exact decimal string. */
-  gravePrice: string;
-  /** Minimum whole-WTH amount per offering. */
-  offeringMin: string;
+  /** Account that receives the NEAR. */
+  receiver: string;
+  /** USD prices (exact decimal strings). */
+  gravePriceUsd: string;
+  offeringMinUsd: string;
+  /** Current USD per NEAR, or null if no price source answered (orders pause). */
+  nearUsd: number | null;
+  /** The USD prices in yoctoNEAR at the current price (null when the price is unknown). */
+  gravePrice: string | null;
+  offeringMin: string | null;
   holdMinutes: number;
   /** Whether Memorial NFT minting is switched on (contract + minter configured on the server). */
   mintingEnabled: boolean;
@@ -143,11 +149,9 @@ export interface MemorialView {
 export interface PaymentView {
   id: string;
   kind: 'grave' | 'offering';
-  memo: string;
   status: PaymentStatus;
-  /** Required amount in the token's smallest unit (yocto-WTH), decimal string. */
+  /** Exact amount to send, in yoctoNEAR (decimal string). Unique per order: it is how the transfer is matched. */
   amount: string;
-  token: string;
   receiver: string;
   plot: number;
   meme: MemeInfo;
@@ -190,4 +194,34 @@ export function parseUnits(whole: string, decimals: number): bigint {
   const [i, f = ''] = whole.split('.');
   if (f.length > decimals) throw new Error(`too many decimals in "${whole}"`);
   return BigInt(i) * 10n ** BigInt(decimals) + BigInt(f.padEnd(decimals, '0') || '0');
+}
+
+// ------------------------------------------------------------------ NEAR amounts
+
+const YOCTO = 10n ** 24n;
+/**
+ * USD amount (decimal string like "0.01") at a NEAR price -> yoctoNEAR, rounded UP to a whole 0.000001 NEAR,
+ * so the price is never undercharged and amounts stay readable.
+ */
+export function usdToYocto(usd: string, nearUsd: number): bigint {
+  if (!/^\d{1,9}(\.\d{1,6})?$/.test(usd)) throw new Error(`bad USD amount "${usd}"`);
+  const [i, f = ''] = usd.split('.');
+  const micro = BigInt(i) * 1_000_000n + BigInt(f.padEnd(6, '0'));            // millionths of a dollar
+  const priceMicro = BigInt(Math.round(nearUsd * 1_000_000));                 // millionths of a dollar per NEAR
+  if (priceMicro <= 0n) throw new Error('bad NEAR price');
+  const step = 10n ** 18n;                                                     // 0.000001 NEAR
+  const raw = (micro * YOCTO + priceMicro - 1n) / priceMicro;
+  return ((raw + step - 1n) / step) * step;
+}
+
+/** yoctoNEAR -> "0.003571 NEAR" (up to 6 decimals, never shows 0 for a non-zero amount). */
+export function nearLabel(yocto: string | bigint): string {
+  const y = BigInt(yocto);
+  const s = formatUnits(y.toString(), 24, 6);
+  return `${s === '0' && y > 0n ? '<0.000001' : s} NEAR`;
+}
+/** yoctoNEAR at a NEAR price -> "$0.01" (2 decimals, or more for tiny amounts). */
+export function usdLabel(yocto: string | bigint, nearUsd: number): string {
+  const usd = (Number(BigInt(yocto) / 10n ** 12n) / 1e12) * nearUsd;
+  return '$' + (usd >= 0.1 ? usd.toFixed(2) : usd.toFixed(usd >= 0.01 ? 3 : 4)).replace(/(\.\d*?[1-9])0+$/, '$1');
 }

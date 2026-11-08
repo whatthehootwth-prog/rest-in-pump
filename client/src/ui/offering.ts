@@ -1,5 +1,5 @@
 import {
-  OFFERING_ITEMS, formatUnits, itemName, levelName, nextLevelIn, parseUnits,
+  OFFERING_ITEMS, formatUnits, itemName, levelName, nearLabel, nextLevelIn, parseUnits, usdLabel, usdToYocto,
   type GraveDetail, type GraveInfo, type MemorialView, type OfferingItem, type PaymentView, type PriceConfig,
 } from '../../../shared/graves.ts';
 import { api } from '../net/api.ts';
@@ -10,10 +10,13 @@ import { memeChip } from './creategrave.ts';
 
 const MINT_POLL_MS = 3000;
 const MINT_POLL_FOR_MS = 3 * 60_000;
-const QUICK_AMOUNTS = ['10000', '25000', '100000'];
+/** Quick picks, in USD (converted to NEAR at the current price). */
+const QUICK_USD = ['0.01', '0.1', '1'];
+/** yoctoNEAR -> plain decimal string for the input ("0.003571"). */
+const nearInput = (yocto: bigint | string) => formatUnits(BigInt(yocto).toString(), 24, 6).replace(/,/g, '');
 
 /**
- * "Leave an offering": pick an item + a WTH amount (at least the minimum) → send it → the grave's community count
+ * "Leave an offering": pick an item + a NEAR amount (at least the USD minimum) → send it → the grave's community count
  * goes up by one. A wallet's first offering to a grave earns that grave's Memorial NFT, minted on NEAR.
  */
 export class OfferingDialog {
@@ -66,7 +69,7 @@ export class OfferingDialog {
     if (!p.grave) return;
     this.grave = p.grave; this.item = (p.item as OfferingItem) ?? 'candle';
     void this.loadConfig();
-    if (this.config) this.amount = formatUnits(p.amount, this.config.decimals, this.config.decimals).replace(/,/g, '');
+    this.amount = nearInput(p.amount);
     await this.flow.resume(p, redirectTx);
     this.afterPaid();
     if (this.flow.state.s === 'confirming' && !redirectTx) return;
@@ -98,8 +101,11 @@ export class OfferingDialog {
     if (!this.config) return null;
     const raw = this.amount.replace(/[,\s]/g, '');
     let v: bigint;
-    try { v = parseUnits(raw, this.config.decimals); } catch { this.amountError = 'Enter a WTH amount, like 10000.'; return null; }
-    if (v < parseUnits(this.config.offeringMin, this.config.decimals)) { this.amountError = `The minimum offering is ${formatUnits(parseUnits(this.config.offeringMin, this.config.decimals).toString(), this.config.decimals)} WTH.`; return null; }
+    if (!/^\d{1,9}(\.\d{1,6})?$/.test(raw)) { this.amountError = 'Enter a NEAR amount, like 0.01 (up to 6 decimals).'; return null; }
+    try { v = parseUnits(raw, 24); } catch { this.amountError = 'Enter a NEAR amount, like 0.01.'; return null; }
+    const min = this.config.offeringMin;
+    if (!min) { this.amountError = 'Could not get the NEAR price right now. Try again in a minute.'; return null; }
+    if (v < BigInt(min)) { this.amountError = `The minimum offering is ${nearLabel(min)} (about $${this.config.offeringMinUsd}).`; return null; }
     this.amountError = null;
     return v;
   }
@@ -182,20 +188,23 @@ export class OfferingDialog {
       }, itemArt(it.id), h('span', {}, it.name))));
     const input = h('input', {
       id: 'offer-amount', inputmode: 'decimal', autocomplete: 'off', value: this.amount, disabled: !editable,
-      placeholder: cfg.offeringMin, 'aria-describedby': 'offer-amount-msg', 'aria-label': 'WTH amount',
+      placeholder: cfg.offeringMin ? nearInput(cfg.offeringMin) : '0.01', 'aria-describedby': 'offer-amount-msg', 'aria-label': 'NEAR amount',
       oninput: (e: Event) => { this.amount = (e.target as HTMLInputElement).value; },
       onkeydown: (e: Event) => { if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); this.pay(); } },
     });
-    const quick = h('div', { class: 'quick' }, ...QUICK_AMOUNTS.map((a) =>
-      h('button', { class: 'amt', type: 'button', disabled: !editable, onclick: () => { this.amount = a; this.amountError = null; this.render(); } }, Number(a).toLocaleString('en-US'))));
+    const quick = h('div', { class: 'quick' }, ...(cfg.nearUsd ? QUICK_USD : []).map((usd) => {
+      const near = nearInput(usdToYocto(usd, cfg.nearUsd!));
+      return h('button', { class: 'amt', type: 'button', disabled: !editable, title: `${near} NEAR`, onclick: () => { this.amount = near; this.amountError = null; this.render(); } },
+        `$${Number(usd) < 1 ? usd.replace(/^0/, '') : usd}`);
+    }));
     let amount = this.flow.payment?.amount ?? null;
     if (!amount && this.amount.trim()) { const v = this.validAmount(); amount = v === null ? null : v.toString(); }
-    const price = amount ? `${formatUnits(amount, cfg.decimals)} WTH` : 'WTH';
+    const price = amount ? nearLabel(amount) : 'NEAR';
     return h('div', { class: 'dlg-step' },
       items,
-      h('div', { class: 'row amount-row' }, input, h('span', { class: 'unit' }, 'WTH')), quick,
+      h('div', { class: 'row amount-row' }, input, h('span', { class: 'unit' }, amount && cfg.nearUsd ? `NEAR · about ${usdLabel(amount, cfg.nearUsd)}` : 'NEAR')), quick,
       h('p', { id: 'offer-amount-msg', class: this.amountError ? 'field-msg bad' : 'field-msg' },
-        this.amountError ?? `At least ${Number(cfg.offeringMin).toLocaleString('en-US')} WTH. Every offering counts as one.`),
+        this.amountError ?? (cfg.offeringMin ? `At least ${nearLabel(cfg.offeringMin)} (about $${cfg.offeringMinUsd}). Every offering counts as one.` : 'Could not get the NEAR price right now. Try again in a minute.')),
       this.memorialNote(),
       this.flow.view({
         price, decimals: cfg.decimals, solo: true,

@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import {
   NEAR_ACCOUNT_RE, RECENT_ITEMS, chainLive, isChain, isOfferingItem, isPlotId, levelFor, parseUnits, plotById, sanitizeMessage,
   type ChainId, type GraveDetail, type GraveInfo, type GravesSnapshot, type MemeInfo, type MemorialStatus, type MemorialView,
@@ -7,9 +7,10 @@ import {
 import { transaction, type Db } from './db.ts';
 import type { Logger } from './log.ts';
 import type { FtMetadata, MetadataResult, TransferCheck, TransferResult } from './near.ts';
+import { usdToYocto, type NearPrice } from './price.ts';
 
 /**
- * Graves and offerings, both paid in WTH and verified on NEAR.
+ * Graves and offerings, both paid in NEAR (priced in USD at the live NEAR price) and verified on chain.
  *
  * Grave:    createGrave HOLDS an empty plot + the meme for a few minutes and returns the exact transfer to make;
  *           confirmPayment verifies the transfer and creates the grave in one transaction.
@@ -23,13 +24,13 @@ import type { FtMetadata, MetadataResult, TransferCheck, TransferResult } from '
 export interface GraveServiceDeps {
   db: Db;
   log: Logger;
-  token: string;
+  /** Account that receives the NEAR. */
   receiver: string;
-  decimals: number;
-  /** Price to create a grave, in the token's smallest unit and as whole tokens (exact decimal string). */
-  gravePrice: { units: bigint; whole: string };
-  /** Minimum offering, same two forms. */
-  offeringMin: { units: bigint; whole: string };
+  /** Price to create a grave and minimum offering, in USD (exact decimal strings like "0.01"). */
+  gravePriceUsd: string;
+  offeringMinUsd: string;
+  /** Live NEAR/USD price. */
+  price: NearPrice;
   holdMinutes: number;
   /** Memorial NFT contract when minting is configured, else null (memorials still queue). */
   nftContract: string | null;
@@ -72,12 +73,27 @@ export class GraveService {
 
   constructor(deps: GraveServiceDeps) { this.d = deps; }
 
-  config(): PriceConfig {
+  async config(): Promise<PriceConfig> {
+    const nearUsd = await this.d.price.usd();
     return {
-      token: this.d.token, receiver: this.d.receiver, decimals: this.d.decimals,
-      gravePrice: this.d.gravePrice.whole, offeringMin: this.d.offeringMin.whole, holdMinutes: this.d.holdMinutes,
-      mintingEnabled: this.d.mintingEnabled, nftContract: this.d.nftContract,
+      currency: 'NEAR', decimals: 24, receiver: this.d.receiver,
+      gravePriceUsd: this.d.gravePriceUsd, offeringMinUsd: this.d.offeringMinUsd, nearUsd,
+      gravePrice: nearUsd ? usdToYocto(this.d.gravePriceUsd, nearUsd).toString() : null,
+      offeringMin: nearUsd ? usdToYocto(this.d.offeringMinUsd, nearUsd).toString() : null,
+      holdMinutes: this.d.holdMinutes, mintingEnabled: this.d.mintingEnabled, nftContract: this.d.nftContract,
     };
+  }
+
+  /**
+   * base (a whole number of 0.000001 NEAR) + a random tail below 0.000001 NEAR that no other recent order has.
+   * The exact amount is how a plain NEAR transfer (which has no memo) is matched to its order.
+   */
+  private uniqueAmount(base: bigint): bigint {
+    for (let i = 0; i < 50; i++) {
+      const amount = base + BigInt(randomInt(1, 1_000_000)) * 10n ** 12n;
+      if (!this.d.db.prepare('SELECT 1 FROM payments WHERE amount = ?').get(amount.toString())) return amount;
+    }
+    throw new Error('could not find a unique amount');
   }
 
   snapshot(): GravesSnapshot {
@@ -183,11 +199,14 @@ export class GraveService {
     if (!res.ok) return err(res.code === 'unavailable' ? 503 : 404, res.code, res.message);
     const meme = memeInfo(chain, contract, res.meta);
 
+    const nearUsd = await this.d.price.usd();
+    if (!nearUsd) return err(503, 'price_unavailable', 'Could not get the NEAR price right now. Try again in a minute.');
+    const amount = this.uniqueAmount(usdToYocto(this.d.gravePriceUsd, nearUsd));
     const id = newId();
     try {
       db.prepare(`INSERT INTO payments (id, kind, status, amount, plot, chain, contract, message, meme_json, client_ip, created_at, expires_at, updated_at)
                   VALUES (?, 'grave', 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, this.d.gravePrice.units.toString(), plot, chain, contract, message, JSON.stringify(meme), ip, now, now + this.d.holdMinutes * 60_000, now);
+        .run(id, amount.toString(), plot, chain, contract, message, JSON.stringify(meme), ip, now, now + this.d.holdMinutes * 60_000, now);
     } catch {
       // lost a race for the plot or the meme (partial unique indexes)
       return err(409, 'plot_reserved', 'Someone grabbed this plot or this meme a moment ago. Try again.');
@@ -203,21 +222,28 @@ export class GraveService {
     const grave = Number.isInteger(graveId) && graveId > 0 ? this.grave(graveId) : null;
     if (!grave) return err(404, 'not_found', 'That grave does not exist.');
     if (!isOfferingItem(input.item)) return err(400, 'bad_item', 'Pick something to leave at the grave.');
-    let amount: bigint;
+    const STEP = 10n ** 18n;   // amounts are whole 0.000001 NEAR (plus the unique tail)
+    let base: bigint;
     try {
-      if (typeof input.amount !== 'string') throw new Error('not a string');
-      amount = parseUnits(input.amount.trim(), this.d.decimals);
+      if (typeof input.amount !== 'string' || !/^\d{1,9}(\.\d{1,6})?$/.test(input.amount.trim())) throw new Error('bad');
+      base = (parseUnits(input.amount.trim(), 24) / STEP) * STEP;
     } catch {
-      return err(400, 'bad_amount', 'Enter a WTH amount, like 10000.');
+      return err(400, 'bad_amount', 'Enter a NEAR amount, like 0.01 (up to 6 decimals).');
     }
-    if (amount < this.d.offeringMin.units) return err(400, 'amount_too_low', `The minimum offering is ${this.d.offeringMin.whole} WTH.`);
+    const nearUsd = await this.d.price.usd();
+    if (!nearUsd) return err(503, 'price_unavailable', 'Could not get the NEAR price right now. Try again in a minute.');
+    const min = usdToYocto(this.d.offeringMinUsd, nearUsd);
+    // 3% grace: the price may move a little between showing the minimum and pressing the button
+    if (base * 100n < min * 97n) return err(400, 'amount_too_low', `The minimum offering is ${trimNear(min)} NEAR (about $${this.d.offeringMinUsd}).`);
     const db = this.d.db;
     const item = input.item;
 
     // same offering still waiting for payment from this visitor (closed the dialog, came back): resume it
-    const same = db.prepare("SELECT * FROM payments WHERE kind = 'offering' AND grave_id = ? AND item = ? AND amount = ? AND client_ip = ? AND status = 'pending' AND tx_hash IS NULL")
-      .get(graveId, item, amount.toString(), ip) as PaymentRow | undefined;
+    const open1 = db.prepare("SELECT * FROM payments WHERE kind = 'offering' AND grave_id = ? AND item = ? AND client_ip = ? AND status = 'pending' AND tx_hash IS NULL")
+      .all(graveId, item, ip) as unknown as PaymentRow[];
+    const same = open1.find((r) => BigInt(r.amount) / STEP === base / STEP);
     if (same) return this.view(same);
+    const amount = this.uniqueAmount(base);
     const open = (db.prepare("SELECT COUNT(*) AS n FROM payments WHERE kind = 'offering' AND client_ip = ? AND status = 'pending' AND tx_hash IS NULL").get(ip) as { n: number }).n;
     if (open >= MAX_OPEN_OFFERINGS_PER_IP) return err(429, 'too_many_open', 'Finish or cancel your other offerings first.');
 
@@ -282,7 +308,7 @@ export class GraveService {
       const row = this.row(id);
       if (!row || !row.tx_hash || !row.payer) return;
       const result = await this.d.verify({
-        txHash: row.tx_hash, signerId: row.payer, token: this.d.token, receiver: this.d.receiver, memo: memoFor(row.id), minAmount: BigInt(row.amount),
+        txHash: row.tx_hash, signerId: row.payer, receiver: this.d.receiver, amount: BigInt(row.amount), notBefore: row.created_at,
       });
       if (result.status === 'pending') {
         if (now - row.expires_at > VERIFY_GIVE_UP_MS) {
@@ -313,9 +339,9 @@ export class GraveService {
     const outcome = transaction(this.d.db, () => {
       const fresh = this.row(row.id)!;
       if (fresh.status === 'fulfilled') return 'already';
-      if (this.d.db.prepare('SELECT 1 FROM graves WHERE plot = ?').get(row.plot)) return 'Your WTH arrived, but this plot was taken after your reservation expired.';
+      if (this.d.db.prepare('SELECT 1 FROM graves WHERE plot = ?').get(row.plot)) return 'Your NEAR arrived, but this plot was taken after your reservation expired.';
       if (this.d.db.prepare('SELECT 1 FROM graves WHERE chain = ? AND contract = ?').get(row.chain, row.contract)) {
-        return 'Your WTH arrived, but someone else created a grave for this meme after your reservation expired.';
+        return 'Your NEAR arrived, but someone else created a grave for this meme after your reservation expired.';
       }
       // creating a grave does not mint an NFT; the creator gets one by making an offering like anyone else
       this.d.db.prepare(`INSERT INTO graves (plot, chain, contract, name, symbol, decimals, icon, message, creator, payment_id, created_at)
@@ -345,7 +371,7 @@ export class GraveService {
       const fresh = this.row(row.id)!;
       if (fresh.status === 'fulfilled') return { kind: 'already' as const };
       const g = db.prepare('SELECT offering_count FROM graves WHERE id = ?').get(row.grave_id) as { offering_count: number } | undefined;
-      if (!g) return { kind: 'error' as const, reason: 'Your WTH arrived, but this grave no longer exists.' };
+      if (!g) return { kind: 'error' as const, reason: 'Your NEAR arrived, but this grave no longer exists.' };
       // payment_id is UNIQUE: a payment can only ever become one offering
       db.prepare('INSERT INTO offerings (grave_id, payment_id, payer, item, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)')
         .run(row.grave_id, row.id, payer, row.item, row.amount, now);
@@ -411,14 +437,19 @@ export class GraveService {
     }
     const memorial = r.kind === 'offering' && r.status === 'fulfilled' && r.payer && r.grave_id !== null ? this.memorial(r.grave_id, r.payer) : null;
     return {
-      id: r.id, kind: r.kind, memo: memoFor(r.id), status: r.status, amount: r.amount, token: this.d.token, receiver: this.d.receiver,
+      id: r.id, kind: r.kind, status: r.status, amount: r.amount, receiver: this.d.receiver,
       plot: r.plot, meme: JSON.parse(r.meme_json) as MemeInfo, message: r.message, graveId: r.grave_id, item: r.item,
       expiresAt: r.expires_at, txHash: r.tx_hash, payer: r.payer, error: r.error, grave, memorial,
     };
   }
 }
 
-export const memoFor = (paymentId: string) => `rip:${paymentId}`;
+/** yoctoNEAR -> "0.003571" (trailing zeros trimmed, 6 decimals max). */
+export function trimNear(yocto: bigint): string {
+  const micro = (yocto + 10n ** 18n - 1n) / 10n ** 18n;
+  const whole = micro / 1_000_000n, frac = (micro % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
+  return frac ? `${whole}.${frac}` : whole.toString();
+}
 const newId = () => randomBytes(12).toString('base64url');
 
 function parseMemeRef(chainRaw: unknown, contractRaw: unknown): { chain: ChainId; contract: string } | GraveError {
@@ -443,12 +474,4 @@ function graveInfo(r: GraveRow, recentItems: string[]): GraveInfo {
 
 export function memorialView(r: MemorialRow): MemorialView {
   return { graveId: r.grave_id, account: r.account_id, status: r.status, tokenId: r.token_id, serial: r.serial, error: r.status === 'minted' ? null : r.error };
-}
-
-/** "75000" whole tokens -> both forms, positive. */
-export function parsePrice(name: string, whole: string, decimals: number): { units: bigint; whole: string } {
-  let units: bigint;
-  try { units = parseUnits(whole.trim(), decimals); } catch { throw new Error(`${name} must be a WTH amount like 75000`); }
-  if (units <= 0n) throw new Error(`${name} must be positive`);
-  return { units, whole: whole.trim() };
 }

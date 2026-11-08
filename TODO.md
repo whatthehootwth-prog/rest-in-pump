@@ -29,22 +29,22 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 
 - [x] 40 empty plots; the whole plot highlights when you walk up; E / button opens "Create a grave"
 - [x] Paste a NEAR token contract → name, symbol and logo read from the chain (ft_metadata)
-- [x] One grave price in fixed WTH (config); the tombstone design comes from the memorial level
+- [x] Graves and offerings paid in NEAR, priced in USD ($0.01) at the live NEAR price; the tombstone design comes from the memorial level
 - [x] Last words 1–100 characters; one grave per contract; graves cannot be removed
-- [x] Wallet connect (MyNearWallet, Meteor, HERE, Intear) and WTH balance check
+- [x] Wallet connect (MyNearWallet, Meteor, HERE, Intear) and NEAR balance check
 - [x] Payment: hold → ft_transfer to whatthehoot.near with memo → verified on NEAR → grave created (one DB transaction)
 - [x] Every payment state: disconnected, connecting, insufficient balance, waiting for approval, sent, confirming,
       done, cancelled in wallet, failed, network error, reservation expired, recovery after refresh / wallet redirect
 - [x] Idempotent: one transaction = one grave; background re-check of interrupted verifications
 - [x] New graves appear live for everyone; walking up shows logo, name, last words and the creator's wallet
-- [ ] **Make one real payment through the game** (a 10,000 WTH offering is cheapest) to confirm verification against a real transaction (you)
+- [ ] **Make one real payment through the game** (a $0.01 offering is cheapest) to confirm verification against a real transaction (you)
 - [ ] Decide the refund process for `unfulfillable` payments (manual today) (you)
 
 ## Offerings + memorial levels (built)
 
-- [x] Funny offering items (candle, flowers, instant noodles, a rug, diamond hands, copium tank) + any WTH amount ≥ 10,000
+- [x] Funny offering items (candle, flowers, instant noodles, a rug, diamond hands, copium tank) + any NEAR amount worth at least $0.01
 - [x] Same verified payment flow (shared with grave creation), every state handled, recovery after refresh / redirect
-- [x] Community offering count = successful offerings (not WTH); failed / duplicate / reused never count
+- [x] Community offering count = successful offerings (not NEAR spent); failed / duplicate / reused never count
 - [x] Levels: Forgotten (0–9) → Remembered (10–99) → Honored (100–999) → Legendary (1,000+); tombstone evolves in the world
 - [x] Latest offerings shown at the grave; offerings and level-ups announced live in chat
 - [x] Burial / bag-burying wording removed (landing, About, plot card, signs, chat)

@@ -28,8 +28,8 @@ const arrow = (x1: number, x2: number, label: string) => `
 writeFileSync(`${out}/wth-flow.svg`, `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 250" width="960" height="250" font-family="Arial Black, Arial, Helvetica, sans-serif">
   <rect width="960" height="250" rx="18" fill="#17161c"/>
-  ${box(20, 160, 'PLAYERS', 'hold $WTH', '#f3efd8')}
-  ${arrow(180, 290, 'spend $WTH')}
+  ${box(20, 160, 'PLAYERS', 'pay in NEAR', '#f3efd8')}
+  ${arrow(180, 290, 'NEAR')}
   ${box(290, 180, 'GRAVES +', 'OFFERINGS', '#bcd2ff')}
   ${arrow(470, 570, 'revenue')}
   ${box(570, 180, 'TREASURY', 'whatthehoot.near', '#e8c35a')}

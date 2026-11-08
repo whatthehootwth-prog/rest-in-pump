@@ -1,10 +1,10 @@
-import { formatUnits, type PaymentView } from '../../../shared/graves.ts';
+import { nearLabel, type PaymentView } from '../../../shared/graves.ts';
 import { api, ApiError } from '../net/api.ts';
 import { Wallet, WalletRejectedError } from '../wallet/wallet.ts';
 import { h } from './dom.ts';
 
 /**
- * The WTH transfer flow shared by "create a grave" and "leave an offering":
+ * The NEAR transfer flow shared by "create a grave" and "leave an offering":
  * connect wallet → create the order on the server → check balance → sign the transfer → server verifies on NEAR.
  * The open order id is kept in localStorage so a refresh or a wallet redirect can finish it.
  * (User-facing text avoids "pay"/"payment" on purpose: it should feel like a game, not a checkout.)
@@ -18,7 +18,7 @@ export type PayState =
   | { s: 'review' }
   | { s: 'connecting' }
   | { s: 'holding' }                                        // creating the payment on the server
-  | { s: 'checking' }                                       // reading the WTH balance
+  | { s: 'checking' }                                       // reading the NEAR balance
   | { s: 'insufficient'; balance: string }
   | { s: 'approve' }                                        // waiting for the wallet
   | { s: 'confirming'; since: number }                      // tx sent, server verifying on NEAR
@@ -91,7 +91,7 @@ export class PayFlow {
     this.set({ s: 'approve' });
     let hash: string;
     try {
-      hash = await this.wallet.sendFtTransfer({ token: p.token, receiver: p.receiver, amount: p.amount, memo: p.memo });
+      hash = await this.wallet.sendNear({ receiver: p.receiver, amount: p.amount });
     } catch (e) {
       if (e instanceof WalletRejectedError) this.set({ s: 'rejected' });
       else this.set({ s: 'error', msg: `The wallet reported a problem: ${(e as Error).message}`, retry: true });
@@ -218,11 +218,11 @@ export class PayFlow {
       }
       case 'connecting': status = busy('Opening your wallet…'); break;
       case 'holding': status = busy(this.noun === 'grave' ? 'Reserving this plot…' : 'Preparing your offering…'); break;
-      case 'checking': status = busy('Checking your WTH balance…'); break;
+      case 'checking': status = busy('Checking your NEAR balance…'); break;
       case 'insufficient':
-        status = h('p', { class: 'status bad' }, `Not enough WTH. You have ${formatUnits(P.balance, o.decimals)} WTH and need ${o.price}.`);
+        status = h('p', { class: 'status bad' }, `Not enough NEAR. You have ${nearLabel(P.balance)} and need ${o.price} (plus a little for the network fee).`);
         actions = [cancel, act('I topped up — try again')]; break;
-      case 'approve': status = busy('Approve the WTH transfer in your wallet…'); break;
+      case 'approve': status = busy('Approve the NEAR transfer in your wallet…'); break;
       case 'confirming': status = busy('Sent. Confirming it on NEAR…'); break;
       case 'slow':
         status = h('p', { class: 'status' }, `NEAR is taking a while to confirm. You can close this — your ${this.noun} counts as soon as NEAR confirms it, even if you refresh.`);
@@ -238,7 +238,7 @@ export class PayFlow {
         actions = [btn('Close', () => void this.cancel().then(o.onClose), true), act('Start again')];
         this.payment = null; break;
       case 'unfulfillable':
-        status = h('p', { class: 'status bad' }, `Your WTH arrived, but the ${this.noun} could not be ${this.noun === 'grave' ? 'created' : 'recorded'}: ${P.msg} Contact support with your transaction hash for a refund.`);
+        status = h('p', { class: 'status bad' }, `Your NEAR arrived, but the ${this.noun} could not be ${this.noun === 'grave' ? 'created' : 'recorded'}: ${P.msg} Contact support with your transaction hash for a refund.`);
         actions = [close]; break;
     }
     const left = this.payment && this.payment.status === 'pending' ? this.payment.expiresAt - Date.now() : 0;

@@ -8,7 +8,7 @@ import { NEAR_ACCOUNT_RE } from '../../shared/graves.ts';
  * JSON HTTP API for graves (request/response flows with clear states).
  * Live changes are pushed to everyone over the game WebSocket.
  *
- *   GET  /api/config                    prices, token, treasury, whether minting is on
+ *   GET  /api/config                    USD prices, NEAR amounts at the live price, treasury, whether minting is on
  *   GET  /api/graves                    all graves + reserved plots
  *   GET  /api/graves/:id?account=       one grave, recent offerings, the account's memorial + offering count
  *   GET  /api/meme?chain=&contract=     resolve a meme (name/symbol/logo) and whether it has a grave
@@ -17,7 +17,7 @@ import { NEAR_ACCOUNT_RE } from '../../shared/graves.ts';
  *   GET  /api/payments/:id              payment status (used to recover after a refresh)
  *   POST /api/payments/:id/confirm      { txHash, accountId } verify on NEAR, then create the grave / count the offering
  *   POST /api/payments/:id/cancel       release an unpaid hold
- *   GET  /api/balance?account=          the account's WTH balance (smallest unit)
+ *   GET  /api/balance?account=          the account's spendable NEAR (yoctoNEAR)
  */
 
 const MAX_BODY = 4096;
@@ -58,7 +58,7 @@ export function createApi(graves: GraveService, log: Logger, clientIp: (req: htt
     const ip = clientIp(req);
     const parts = url.pathname.split('/').filter(Boolean);   // ['api', ...]
     try {
-      if (req.method === 'GET' && url.pathname === '/api/config') { send(res, 200, graves.config()); return true; }
+      if (req.method === 'GET' && url.pathname === '/api/config') { send(res, 200, await graves.config()); return true; }
       if (req.method === 'GET' && url.pathname === '/api/graves') { send(res, 200, graves.snapshot()); return true; }
       if (req.method === 'GET' && parts[1] === 'graves' && parts.length === 3) {
         const out = graves.detail(parts[2], url.searchParams.get('account'));
@@ -77,7 +77,7 @@ export function createApi(graves: GraveService, log: Logger, clientIp: (req: htt
         const account = url.searchParams.get('account') ?? '';
         if (!NEAR_ACCOUNT_RE.test(account)) { send(res, 400, { error: { code: 'bad_account', message: 'That is not a NEAR account.' } }); return true; }
         const balance = await balanceOf(account).catch(() => null);
-        if (balance === null) send(res, 503, { error: { code: 'unavailable', message: 'Could not read the WTH balance right now.' } });
+        if (balance === null) send(res, 503, { error: { code: 'unavailable', message: 'Could not read the NEAR balance right now.' } });
         else send(res, 200, { account, balance });
         return true;
       }

@@ -1,5 +1,5 @@
 /**
- * NEAR mainnet access over public JSON-RPC: reading token metadata and verifying WTH payments.
+ * NEAR mainnet access over public JSON-RPC: reading token metadata and balances, and verifying NEAR payments.
  * Several RPC endpoints are tried in order so one provider being down does not stop the game.
  */
 
@@ -103,15 +103,16 @@ export async function fetchFtMetadata(rpc: NearRpc, contract: string): Promise<M
   return { ok: true, meta: { name: name || symbol, symbol: symbol || name, decimals, icon } };
 }
 
-// ------------------------------------------------------------------ payment verification
+// ------------------------------------------------------------------ payment verification (native NEAR)
 
 export interface TransferCheck {
   txHash: string;
   signerId: string;
-  token: string;
   receiver: string;
-  memo: string;
-  minAmount: bigint;
+  /** Exact yoctoNEAR amount of this order. Each open order has a unique amount, which is how a transfer is matched to it. */
+  amount: bigint;
+  /** The transfer must be in a block at or after this time (ms): an older transfer can't pay a newer order. */
+  notBefore: number;
 }
 
 export type TransferResult =
@@ -122,18 +123,29 @@ export type TransferResult =
 interface TxStatus {
   final_execution_status?: string;
   status?: Record<string, unknown>;
-  transaction?: { signer_id?: string; hash?: string };
-  receipts_outcome?: Array<{ outcome?: { executor_id?: string; logs?: string[]; status?: Record<string, unknown> } }>;
+  transaction?: { signer_id?: string; receiver_id?: string; hash?: string; actions?: unknown[] };
+  transaction_outcome?: { block_hash?: string };
+  receipts_outcome?: Array<{ outcome?: { executor_id?: string; status?: Record<string, unknown> } }>;
 }
 
 const TX_HASH_RE = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
 export const isTxHash = (v: unknown): v is string => typeof v === 'string' && TX_HASH_RE.test(v);
+/** Clock skew allowed between our server and NEAR block time. */
+const SKEW_MS = 2 * 60_000;
+
+/** The deposit of a plain Transfer action in an RPC transaction, or null. */
+function transferDeposit(action: unknown): bigint | null {
+  if (!action || typeof action !== 'object') return null;
+  const t = (action as { Transfer?: { deposit?: unknown } }).Transfer;
+  if (!t || typeof t.deposit !== 'string' || !/^\d+$/.test(t.deposit)) return null;
+  return BigInt(t.deposit);
+}
 
 /**
- * Verifies on-chain that `signerId` sent at least `minAmount` of `token` to `receiver` with exactly `memo`,
- * using the NEP-141 ft_transfer event emitted by the token contract in a successful receipt.
+ * Verifies on-chain that `signerId` sent exactly `amount` yoctoNEAR to `receiver` in a plain transfer, that the
+ * transaction is final and successful, and that it happened after the order was created.
  */
-export async function verifyFtTransfer(rpc: NearRpc, c: TransferCheck): Promise<TransferResult> {
+export async function verifyNearTransfer(rpc: NearRpc, c: TransferCheck): Promise<TransferResult> {
   let tx: TxStatus;
   try {
     tx = await rpc.call<TxStatus>('EXPERIMENTAL_tx_status', { tx_hash: c.txHash, sender_account_id: c.signerId, wait_until: 'FINAL' });
@@ -147,26 +159,41 @@ export async function verifyFtTransfer(rpc: NearRpc, c: TransferCheck): Promise<
   if (tx.final_execution_status && tx.final_execution_status !== 'FINAL') return { status: 'pending' };
   if (!tx.status || 'Failure' in tx.status) return { status: 'invalid', reason: 'The transaction failed on NEAR.' };
   if (tx.transaction?.signer_id !== c.signerId) return { status: 'invalid', reason: 'The transaction was signed by a different account.' };
-
-  for (const r of tx.receipts_outcome ?? []) {
-    const o = r.outcome;
-    if (!o || o.executor_id !== c.token) continue;
-    if (!o.status || !('SuccessValue' in o.status || 'SuccessReceiptId' in o.status)) continue;
-    for (const log of o.logs ?? []) {
-      if (!log.startsWith('EVENT_JSON:')) continue;
-      let ev: { standard?: string; event?: string; data?: Array<Record<string, unknown>> };
-      try { ev = JSON.parse(log.slice('EVENT_JSON:'.length)); } catch { continue; }
-      if (ev.standard !== 'nep141' || ev.event !== 'ft_transfer' || !Array.isArray(ev.data)) continue;
-      for (const d of ev.data) {
-        if (d.old_owner_id !== c.signerId || d.new_owner_id !== c.receiver || d.memo !== c.memo) continue;
-        let amount: bigint;
-        try { amount = BigInt(String(d.amount)); } catch { continue; }
-        if (amount < c.minAmount) return { status: 'invalid', reason: 'The amount sent is less than the price.' };
-        return { status: 'ok', payer: c.signerId, amount };
-      }
-    }
+  if (tx.transaction?.receiver_id !== c.receiver) return { status: 'invalid', reason: 'That transaction did not send NEAR to the treasury.' };
+  const deposits = (tx.transaction.actions ?? []).map(transferDeposit).filter((d): d is bigint => d !== null);
+  if (!deposits.length) return { status: 'invalid', reason: 'That transaction is not a NEAR transfer.' };
+  if (!deposits.includes(c.amount)) return { status: 'invalid', reason: 'The amount sent does not match this order.' };
+  // the transfer receipt on the treasury must have succeeded
+  const landed = (tx.receipts_outcome ?? []).some((r) => r.outcome?.executor_id === c.receiver && r.outcome.status && ('SuccessValue' in r.outcome.status || 'SuccessReceiptId' in r.outcome.status));
+  if (!landed) return { status: 'invalid', reason: 'The NEAR transfer did not complete.' };
+  // and it must be newer than the order (blocks carry nanosecond timestamps)
+  const blockHash = tx.transaction_outcome?.block_hash;
+  if (!blockHash) return { status: 'pending' };
+  let tsNs: bigint;
+  try {
+    const block = await rpc.call<{ header?: { timestamp_nanosec?: string; timestamp?: number } }>('block', { block_id: blockHash });
+    const raw = block.header?.timestamp_nanosec ?? (block.header?.timestamp !== undefined ? String(block.header.timestamp) : null);
+    if (!raw || !/^\d+$/.test(raw)) return { status: 'pending' };
+    tsNs = BigInt(raw);
+  } catch {
+    return { status: 'pending' };
   }
-  return { status: 'invalid', reason: 'No matching WTH transfer to the treasury was found in that transaction.' };
+  if (tsNs / 1_000_000n < BigInt(c.notBefore - SKEW_MS)) return { status: 'invalid', reason: 'That transfer was made before this order.' };
+  return { status: 'ok', payer: c.signerId, amount: c.amount };
+}
+
+/** Spendable NEAR of an account in yoctoNEAR (balance minus what its storage locks), or null if unknown. */
+export async function nearBalance(rpc: NearRpc, account: string): Promise<string | null> {
+  try {
+    const r = await rpc.call<{ amount?: string; storage_usage?: number }>('query', { request_type: 'view_account', finality: 'final', account_id: account });
+    if (typeof r.amount !== 'string' || !/^\d+$/.test(r.amount)) return null;
+    const locked = BigInt(r.storage_usage ?? 0) * 10n ** 19n;   // 1e19 yocto per byte of storage
+    const free = BigInt(r.amount) - locked;
+    return (free > 0n ? free : 0n).toString();
+  } catch (err) {
+    if (err instanceof RpcError && err.cause_name === 'UNKNOWN_ACCOUNT') return '0';
+    return null;
+  }
 }
 
 /** Whole-token decimal string (e.g. "75000" or "12.5") -> smallest unit. */
