@@ -39,7 +39,7 @@ npm run check        # typecheck client + server, then run the tests
 npm run contract:build   # build the Memorial NFT contract (needs Rust + the wasm32 target); its tests then run in npm test
 ```
 
-A local copy starts with an empty graveyard. To see a grave, add one clearly labelled demo grave (plot 37, by the path near the gate; not a real meme, nobody paid for it), and remove it when you are done. Never run it against the production database.
+A local copy starts with an empty graveyard. To see graves, add four clearly labelled demo graves, one per level (plots 37, 36, 29, 28 by the path near the gate; not real memes, nobody paid for them, offering counts set for display), and remove them when you are done. Never run it against the production database.
 
 ```bash
 node scripts/demo-grave.ts            # add
