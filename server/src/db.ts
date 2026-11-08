@@ -8,9 +8,11 @@ import { DatabaseSync } from 'node:sqlite';
  */
 export type Db = DatabaseSync;
 
-const MIGRATIONS: string[] = [
+interface Migration { sql: string; /** run with foreign keys off (table rebuilds), then checked */ rebuild?: boolean }
+
+const MIGRATIONS: Migration[] = [
   // 1: graves + payments
-  `
+  { sql: `
   CREATE TABLE payments (
     id           TEXT PRIMARY KEY,               -- also used in the transfer memo
     kind         TEXT NOT NULL CHECK (kind IN ('grave')),
@@ -51,7 +53,74 @@ const MIGRATIONS: string[] = [
     created_at   INTEGER NOT NULL,
     UNIQUE (chain, contract)                     -- one grave per meme, ever
   );
-  `,
+  ` },
+
+  // 2: offerings + Memorial NFTs. Tombstone tiers are replaced by levels from the offering count.
+  { rebuild: true, sql: `
+  CREATE TABLE payments_v2 (
+    id           TEXT PRIMARY KEY,
+    kind         TEXT NOT NULL CHECK (kind IN ('grave','offering')),
+    status       TEXT NOT NULL CHECK (status IN ('pending','confirming','fulfilled','expired','failed','unfulfillable')),
+    amount       TEXT NOT NULL,
+    plot         INTEGER NOT NULL,
+    chain        TEXT NOT NULL,
+    contract     TEXT NOT NULL,
+    grave_id     INTEGER REFERENCES graves(id),  -- offering: the grave it goes to
+    item         TEXT,                           -- offering: the item left
+    message      TEXT NOT NULL,
+    meme_json    TEXT NOT NULL,
+    tx_hash      TEXT UNIQUE,
+    payer        TEXT,
+    error        TEXT,
+    client_ip    TEXT,
+    created_at   INTEGER NOT NULL,
+    expires_at   INTEGER NOT NULL,
+    updated_at   INTEGER NOT NULL,
+    CHECK ((kind = 'offering') = (grave_id IS NOT NULL AND item IS NOT NULL))
+  );
+  INSERT INTO payments_v2 (id, kind, status, amount, plot, chain, contract, message, meme_json, tx_hash, payer, error, client_ip, created_at, expires_at, updated_at)
+    SELECT id, kind, status, amount, plot, chain, contract, message, meme_json, tx_hash, payer, error, client_ip, created_at, expires_at, updated_at FROM payments;
+  DROP TABLE payments;
+  ALTER TABLE payments_v2 RENAME TO payments;
+  -- only grave creation holds a plot / a meme
+  CREATE UNIQUE INDEX payments_open_plot ON payments(plot) WHERE kind = 'grave' AND status IN ('pending','confirming');
+  CREATE UNIQUE INDEX payments_open_contract ON payments(chain, contract) WHERE kind = 'grave' AND status IN ('pending','confirming');
+  CREATE INDEX payments_status ON payments(status, expires_at);
+
+  ALTER TABLE graves DROP COLUMN tier;
+  ALTER TABLE graves ADD COLUMN offering_count INTEGER NOT NULL DEFAULT 0;   -- successful offerings only
+
+  -- one row per successful offering payment (never for failed or repeated confirmations)
+  CREATE TABLE offerings (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    grave_id     INTEGER NOT NULL REFERENCES graves(id),
+    payment_id   TEXT NOT NULL UNIQUE REFERENCES payments(id),
+    payer        TEXT NOT NULL,
+    item         TEXT NOT NULL,
+    amount       TEXT NOT NULL,
+    created_at   INTEGER NOT NULL
+  );
+  CREATE INDEX offerings_grave ON offerings(grave_id, id);
+  CREATE INDEX offerings_payer ON offerings(grave_id, payer);
+
+  -- one Memorial NFT per wallet per grave, queued on the wallet's first offering and minted on NEAR
+  CREATE TABLE memorials (
+    grave_id          INTEGER NOT NULL REFERENCES graves(id),
+    account_id        TEXT NOT NULL,
+    status            TEXT NOT NULL CHECK (status IN ('pending','minting','minted','failed')),
+    token_id          TEXT UNIQUE,
+    serial            INTEGER,
+    attempts          INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at   INTEGER NOT NULL DEFAULT 0,
+    error             TEXT,
+    mint_tx           TEXT,
+    first_offering_at INTEGER NOT NULL,
+    created_at        INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL,
+    PRIMARY KEY (grave_id, account_id)
+  );
+  CREATE INDEX memorials_queue ON memorials(status, next_attempt_at);
+  ` },
 ];
 
 export function openDb(file: string): Db {
@@ -65,14 +134,23 @@ export function openDb(file: string): Db {
 function migrate(db: Db) {
   const current = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
   for (let v = current; v < MIGRATIONS.length; v++) {
+    const m = MIGRATIONS[v];
+    // a table rebuild needs foreign keys off (it can't be switched inside a transaction)
+    if (m.rebuild) db.exec('PRAGMA foreign_keys = OFF');
     db.exec('BEGIN IMMEDIATE');
     try {
-      db.exec(MIGRATIONS[v]);
+      db.exec(m.sql);
+      if (m.rebuild) {
+        const broken = db.prepare('PRAGMA foreign_key_check').all();
+        if (broken.length) throw new Error(`foreign key check failed: ${JSON.stringify(broken.slice(0, 3))}`);
+      }
       db.exec(`PRAGMA user_version = ${v + 1}`);
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
       throw new Error(`database migration ${v + 1} failed: ${(err as Error).message}`);
+    } finally {
+      if (m.rebuild) db.exec('PRAGMA foreign_keys = ON');
     }
   }
 }

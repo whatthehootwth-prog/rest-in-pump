@@ -19,15 +19,15 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 - [x] Reconnect with backoff and clear status banner (reconnecting / offline / full / outdated)
 - [x] Server checks: speed/teleport limits, world bounds, rate limits, origin allow-list, heartbeats
 - [x] Minimal HUD: real online count, name change, shadows toggle (no top-left panel)
-- [x] Automated tests (45): protocol, rooms, chat, graves, payments, NEAR verification, HTTP + WebSocket integration
+- [x] Automated tests (63): protocol, rooms, chat, graves, offerings, minting, NFT artwork + metadata, migration, NEAR verification, HTTP + WebSocket integration, compiled NFT contract
 - [x] Project logo (favicon, loading screen, HUD)
 - [x] Local git repo, author `wth <whatthehootwth@gmail.com>`
 
 ## Graves (built)
 
-- [x] 40 empty plots; the whole plot highlights when you walk up; E / button opens "Bury a meme"
+- [x] 40 empty plots; the whole plot highlights when you walk up; E / button opens "Create a grave"
 - [x] Paste a NEAR token contract → name, symbol and logo read from the chain (ft_metadata)
-- [x] 4 tombstone tiers ($1 / $5 / $10 / $50) with different designs, priced in fixed WTH amounts (config)
+- [x] One grave price in fixed WTH (config); the tombstone design comes from the memorial level
 - [x] Last words 1–100 characters; one grave per contract; graves cannot be removed
 - [x] Wallet connect (MyNearWallet, Meteor, HERE, Intear) and WTH balance check
 - [x] Payment: hold → ft_transfer to whatthehoot.near with memo → verified on NEAR → grave created (one DB transaction)
@@ -35,14 +35,29 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
       done, cancelled in wallet, failed, network error, reservation expired, recovery after refresh / wallet redirect
 - [x] Idempotent: one transaction = one grave; background re-check of interrupted verifications
 - [x] New graves appear live for everyone; walking up shows logo, name, last words and the creator's wallet
-- [ ] **Make one real $1-tier payment through the game** to confirm verification against a real transaction (you)
+- [ ] **Make one real payment through the game** (a 10,000 WTH offering is cheapest) to confirm verification against a real transaction (you)
 - [ ] Decide the refund process for `unfulfillable` payments (manual today) (you)
 
-## Next — Offerings
+## Offerings + memorial levels (built)
 
-- [ ] Funny offering items (e.g. candle, flowers, instant noodles, rug, diamond hands, copium tank)
-- [ ] Any WTH amount above a minimum, using the same verified payment flow
-- [ ] Offerings appear at the grave for everyone; the grave shows total WTH offered and recent offerings
+- [x] Funny offering items (candle, flowers, instant noodles, a rug, diamond hands, copium tank) + any WTH amount ≥ 10,000
+- [x] Same verified payment flow (shared with grave creation), every state handled, recovery after refresh / redirect
+- [x] Community offering count = successful offerings (not WTH); failed / duplicate / reused never count
+- [x] Levels: Forgotten (0–9) → Remembered (10–99) → Honored (100–999) → Legendary (1,000+); tombstone evolves in the world
+- [x] Latest offerings shown at the grave; offerings and level-ups announced live in chat
+- [x] Burial / bag-burying wording removed (landing, About, plot card, signs, chat)
+
+## Memorial NFTs (built, not deployed)
+
+- [x] NEP-171 contract `contracts/memorial`: one memorial per wallet per grave, "$RUG — Memorial #001", nft_mint event
+- [x] Contract tests run against the compiled wasm (`server/test/contract.test.ts`)
+- [x] Server minter: queued on first offering, idempotent (memorial_of check), retries with backoff, honest "not switched on" state
+- [x] Live metadata JSON with all attributes + artwork that changes with the grave's level, served under /nft
+- [x] Plot card + offering dialog show the wallet's memorial status (earned / minting / minted / failed)
+- [ ] **Deploy to testnet first, then `memorial.whatthehoot.near`** with the README commands (you)
+- [ ] Create `minter.whatthehoot.near` + a function-call key for the server; set `NFT_CONTRACT`, `MINTER_ACCOUNT_ID`, `MINTER_PRIVATE_KEY`, `PUBLIC_BASE_URL` (you)
+- [ ] Check a minted memorial shows correctly in MyNearWallet / Meteor and on NearBlocks (you + me)
+- [ ] Keep the contract account funded for NFT storage (~0.01 NEAR per memorial) (you)
 
 ## Later
 

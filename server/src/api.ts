@@ -8,12 +8,14 @@ import { NEAR_ACCOUNT_RE } from '../../shared/graves.ts';
  * JSON HTTP API for graves (request/response flows with clear states).
  * Live changes are pushed to everyone over the game WebSocket.
  *
- *   GET  /api/config                    prices, token, treasury
+ *   GET  /api/config                    prices, token, treasury, whether minting is on
  *   GET  /api/graves                    all graves + reserved plots
- *   GET  /api/meme?chain=&contract=     resolve a meme (name/symbol/logo) and whether it is buried
- *   POST /api/payments                  hold a plot + meme and get the transfer to make
+ *   GET  /api/graves/:id?account=       one grave, recent offerings, the account's memorial + offering count
+ *   GET  /api/meme?chain=&contract=     resolve a meme (name/symbol/logo) and whether it has a grave
+ *   POST /api/payments                  { plot, chain, contract, message } hold a plot + meme, get the transfer
+ *   POST /api/offerings                 { graveId, item, amount } get the transfer for an offering
  *   GET  /api/payments/:id              payment status (used to recover after a refresh)
- *   POST /api/payments/:id/confirm      { txHash, accountId } — verify on NEAR and create the grave
+ *   POST /api/payments/:id/confirm      { txHash, accountId } verify on NEAR, then create the grave / count the offering
  *   POST /api/payments/:id/cancel       release an unpaid hold
  *   GET  /api/balance?account=          the account's WTH balance (smallest unit)
  */
@@ -58,6 +60,11 @@ export function createApi(graves: GraveService, log: Logger, clientIp: (req: htt
     try {
       if (req.method === 'GET' && url.pathname === '/api/config') { send(res, 200, graves.config()); return true; }
       if (req.method === 'GET' && url.pathname === '/api/graves') { send(res, 200, graves.snapshot()); return true; }
+      if (req.method === 'GET' && parts[1] === 'graves' && parts.length === 3) {
+        const out = graves.detail(parts[2], url.searchParams.get('account'));
+        if (isErr(out)) fail(res, out); else send(res, 200, out);
+        return true;
+      }
 
       if (limited(ip)) { send(res, 429, { error: { code: 'rate_limited', message: 'Too many requests. Wait a moment.' } }); return true; }
 
@@ -77,7 +84,14 @@ export function createApi(graves: GraveService, log: Logger, clientIp: (req: htt
       if (req.method === 'POST' && url.pathname === '/api/payments') {
         const body = await readJson(req);
         if (!body) { send(res, 400, { error: { code: 'bad_request', message: 'Expected a JSON body.' } }); return true; }
-        const out = await graves.createPayment({ plot: body.plot, chain: body.chain, contract: body.contract, tier: body.tier, message: body.message }, ip, Date.now());
+        const out = await graves.createGrave({ plot: body.plot, chain: body.chain, contract: body.contract, message: body.message }, ip, Date.now());
+        if (isErr(out)) fail(res, out); else send(res, 201, out);
+        return true;
+      }
+      if (req.method === 'POST' && url.pathname === '/api/offerings') {
+        const body = await readJson(req);
+        if (!body) { send(res, 400, { error: { code: 'bad_request', message: 'Expected a JSON body.' } }); return true; }
+        const out = await graves.createOffering({ graveId: body.graveId, item: body.item, amount: body.amount }, ip, Date.now());
         if (isErr(out)) fail(res, out); else send(res, 201, out);
         return true;
       }

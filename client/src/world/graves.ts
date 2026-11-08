@@ -20,9 +20,9 @@ interface PlotView {
 const NEAR_RANGE = 1.0;   // how far outside the plot rectangle still counts as "at" the plot (rows are 1.6 m apart; nearest wins)
 
 /**
- * The 40 grave plots: empty ones (dirt bed + "YOUR BAGS HERE" sign), real graves built from server data
- * (four tombstone tiers showing the meme logo, ticker and name), and the highlight around the plot the
- * player is standing at.
+ * The 40 grave plots: empty ones (dirt bed + "VACANT" sign), real graves built from server data
+ * (the tombstone grows with the grave's memorial level and shows the meme logo, ticker and name, with the
+ * latest offerings laid in front), and the highlight around the plot the player is standing at.
  */
 export class GraveField {
   private readonly scene: THREE.Scene;
@@ -40,7 +40,7 @@ export class GraveField {
     this.colliders = colliders;
     this.mats = makeMaterials(stone, iron);
     const g = sharedGeometry();
-    const signTex = labelTexture(['YOUR BAGS', 'HERE'], { w: 256, h: 112, color: '#2a1d12', font: '700 34px Georgia, serif', bg: '#b08a5a' });
+    const signTex = labelTexture(['VACANT', 'R.I.P. TBD'], { w: 256, h: 112, color: '#2a1d12', font: '700 34px Georgia, serif', bg: '#b08a5a' });
     const signMat = new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.9 });
     this.views = PLOTS.map((plot) => {
       const group = new THREE.Group();
@@ -77,17 +77,24 @@ export class GraveField {
     for (const g of graves) this.addGrave(g);
   }
 
+  /** Adds a grave, or rebuilds it when its level or offerings changed. */
   addGrave(g: GraveInfo): void {
     const v = this.views[g.plot - 1];
-    if (!v || (v.grave && v.grave.id === g.id)) return;
+    if (!v) return;
+    if (v.grave && v.grave.id === g.id && v.grave.level === g.level && v.grave.recentItems.join() === g.recentItems.join()) {
+      v.grave = g;   // only the count changed
+      return;
+    }
     if (v.graveObj) this.clearGrave(v);
     v.grave = g;
     v.graveObj = buildGrave(g, this.mats);
     v.group.add(v.graveObj);
     for (const b of v.emptyBits) b.visible = false;
-    const r = [0.25, 0.42, 0.58, 0.85][g.tier - 1];
-    this.colliders.circles.push({ x: v.plot.x, z: v.plot.z + (g.tier === 4 ? -0.3 : -0.75), r, ...{ graveId: g.id } } as Colliders['circles'][number]);
+    const r = [0.25, 0.42, 0.58, 0.85][g.level - 1];
+    this.colliders.circles.push({ x: v.plot.x, z: v.plot.z + (g.level === 4 ? -0.3 : -0.75), r, ...{ graveId: g.id } } as Colliders['circles'][number]);
   }
+
+  grave(id: number): GraveInfo | null { return this.views.find((v) => v.grave?.id === id)?.grave ?? null; }
 
   setReserved(plots: number[]): void { this.reserved = new Set(plots); }
 
@@ -123,7 +130,7 @@ export class GraveField {
   }
 
   private clearGrave(v: PlotView) {
-    if (v.graveObj) v.group.remove(v.graveObj);
+    if (v.graveObj) { v.group.remove(v.graveObj); disposeGrave(v.graveObj); }
     const id = v.grave?.id;
     const i = this.colliders.circles.findIndex((c) => (c as { graveId?: number }).graveId === id);
     if (i >= 0) this.colliders.circles.splice(i, 1);
@@ -160,6 +167,17 @@ function makeMaterials(stone: THREE.MeshStandardMaterial[], iron: THREE.MeshStan
     marble: new THREE.MeshStandardMaterial({ color: 0x2c2933, roughness: 0.35, metalness: 0.1 }),
     gold: new THREE.MeshStandardMaterial({ color: 0xd9a743, roughness: 0.35, metalness: 0.85, emissive: 0x3a2808 }),
     flame: new THREE.MeshBasicMaterial({ color: 0xffc46b, toneMapped: false }),
+    wax: new THREE.MeshStandardMaterial({ color: 0xefe6cf, roughness: 0.8 }),
+    petal: new THREE.MeshStandardMaterial({ color: 0xe2557a, roughness: 0.7 }),
+    petal2: new THREE.MeshStandardMaterial({ color: 0xf1c84b, roughness: 0.7 }),
+    stem: new THREE.MeshStandardMaterial({ color: 0x5c8f4e, roughness: 0.9 }),
+    cup: new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.6 }),
+    cupBand: new THREE.MeshStandardMaterial({ color: 0xd6453d, roughness: 0.6 }),
+    rug: new THREE.MeshStandardMaterial({ color: 0xa3403a, roughness: 1 }),
+    rugStripe: new THREE.MeshStandardMaterial({ color: 0xe8c35a, roughness: 1 }),
+    diamond: new THREE.MeshStandardMaterial({ color: 0x7fd3e8, roughness: 0.15, metalness: 0.3, emissive: 0x123844 }),
+    tank: new THREE.MeshStandardMaterial({ color: 0x6fae5d, roughness: 0.5, metalness: 0.3 }),
+    steel: new THREE.MeshStandardMaterial({ color: 0x8a8a8a, roughness: 0.4, metalness: 0.7 }),
   };
 }
 
@@ -231,31 +249,34 @@ function archGeo(w: number, h: number, d: number) {
 function buildGrave(g: GraveInfo, m: ReturnType<typeof makeMaterials>): THREE.Group {
   const root = new THREE.Group();
   const icon = new THREE.MeshBasicMaterial({ map: iconTexture(g.meme) });
+  root.userData.owned = [icon] as THREE.Material[];   // per-grave materials, disposed with the grave
+  const own = <T extends THREE.Material>(mat: T): T => { (root.userData.owned as THREE.Material[]).push(mat); return mat; };
   const sym = (g.meme.symbol || g.meme.name).toUpperCase();
   const add = (o: THREE.Mesh, x: number, y: number, z: number) => { o.position.set(x, y, z); o.castShadow = true; o.receiveShadow = true; root.add(o); return o; };
   const plane = (w: number, h: number, mat: THREE.Material) => new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
-  const engraved = (lines: string[], gold = false) => new THREE.MeshStandardMaterial({
+  const engraved = (lines: string[], gold = false) => own(new THREE.MeshStandardMaterial({
     map: labelTexture(lines, { w: 512, h: 160, color: gold ? '#f0c768' : '#25222c', shadow: gold ? 'rgba(0,0,0,.6)' : 'rgba(230,228,240,.35)', font: '700 64px Georgia, serif' }),
     transparent: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2,
-  });
+  }));
   const mound = new THREE.Mesh(sharedGeometry().mound, m.soilLight);
-  mound.position.set(0, 0.04, 0.2); mound.receiveShadow = true; root.add(mound);
+  mound.position.set(0, 0.04, 0.2); mound.receiveShadow = true; mound.userData.shared = true; root.add(mound);
   const Z = -0.75;
+  addOfferings(root, g, m);
 
-  if (g.tier === 1) {                                          // $1 — wooden cross with the logo nailed on
+  if (g.level === 1) {                                         // Forgotten — a wooden cross with the logo nailed on
     add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.05, 0.08), m.wood), 0, 0.52, Z);
     add(new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.1, 0.08), m.wood), 0, 0.74, Z);
     add(new THREE.Mesh(new THREE.CircleGeometry(0.15, 40), icon), 0, 0.74, Z + 0.045);
     const plank = add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.15, 0.03), m.wood), 0, 0.33, Z + 0.06);
     plank.rotation.z = 0.05;
     add(plane(0.46, 0.14, engraved([sym])), 0, 0.33, Z + 0.077).rotation.z = 0.05;
-  } else if (g.tier === 2) {                                   // $5 — classic rounded headstone
+  } else if (g.level === 2) {                                  // Remembered — a classic rounded headstone
     add(new THREE.Mesh(archGeo(0.72, 1.02, 0.14), m.stone[0]), 0, 0, Z);
     add(new THREE.Mesh(new THREE.CircleGeometry(0.2, 48), icon), 0, 0.64, Z + 0.1);
     add(plane(0.64, 0.2, engraved([sym])), 0, 0.32, Z + 0.1);
     add(plane(0.4, 0.12, engraved(['R.I.P.'])), 0, 0.92, Z + 0.1);
     add(new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.1, 1.5), m.stone[2]), 0, 0.05, 0.2);
-  } else if (g.tier === 3) {                                   // $10 — grand marble tombstone with gold and candles
+  } else if (g.level === 3) {                                  // Honored — a grand marble tombstone with gold and candles
     add(new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.24, 0.45), m.marble), 0, 0.12, Z);
     add(new THREE.Mesh(archGeo(0.96, 1.34, 0.16), m.marble), 0, 0.24, Z);
     add(new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.025, 10, 48), m.gold), 0, 1.1, Z + 0.11);
@@ -267,7 +288,7 @@ function buildGrave(g: GraveInfo, m: ReturnType<typeof makeMaterials>): THREE.Gr
       add(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.2, 10), m.gold), s * 0.48, 0.34, Z + 0.12);
       add(new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), m.flame), s * 0.48, 0.47, Z + 0.12).scale.y = 1.6;
     }
-  } else {                                                     // $50 — a little mausoleum
+  } else {                                                     // Legendary — a little mausoleum
     add(new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 2.2), m.stone[2]), 0, 0.1, 0);
     add(new THREE.Mesh(new THREE.BoxGeometry(1.32, 1.65, 0.2), m.marble), 0, 1.02, -0.92);
     for (const x of [-0.6, 0.6]) for (const z of [-0.6, 0.55]) add(new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.09, 1.65, 14), m.stone[0]), x, 1.02, z);
@@ -286,4 +307,68 @@ function buildGrave(g: GraveInfo, m: ReturnType<typeof makeMaterials>): THREE.Gr
     }
   }
   return root;
+}
+
+/** Frees a removed grave's GPU resources (its own geometry and text materials; shared ones stay). */
+function disposeGrave(root: THREE.Object3D) {
+  root.traverse((o) => {
+    if (o instanceof THREE.Mesh && !o.userData.shared) o.geometry.dispose();
+  });
+  const icons = new Set<THREE.Texture>(iconCache.values());
+  for (const mat of (root.userData.owned as THREE.Material[] | undefined) ?? []) {
+    const map = (mat as THREE.MeshStandardMaterial).map;
+    if (map && !icons.has(map)) map.dispose();
+    mat.dispose();
+  }
+}
+
+/** The latest offerings, laid out in a row in front of the stone (newest in the middle). */
+function addOfferings(root: THREE.Group, g: GraveInfo, m: ReturnType<typeof makeMaterials>) {
+  const slots = [0, -0.22, 0.22, -0.44, 0.44, -0.11];
+  const z = g.level === 4 ? 0.98 : g.level === 3 ? -0.38 : -0.48;
+  const y = [0.08, 0.1, 0.14, 0.2][g.level - 1];
+  g.recentItems.slice(0, slots.length).forEach((item, i) => {
+    const prop = offeringProp(item, m);
+    if (!prop) return;
+    prop.position.set(slots[i], y, z + (i % 2) * 0.12);
+    prop.rotation.y = ((g.id * 7 + i * 13) % 10) / 10 - 0.5;
+    prop.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true; });
+    root.add(prop);
+  });
+}
+
+function offeringProp(item: string, m: ReturnType<typeof makeMaterials>): THREE.Group | null {
+  const p = new THREE.Group();
+  const mesh = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); p.add(o); return o; };
+  switch (item) {
+    case 'candle':
+      mesh(new THREE.CylinderGeometry(0.03, 0.032, 0.14, 10), m.wax, 0, 0.07, 0);
+      mesh(new THREE.SphereGeometry(0.022, 8, 6), m.flame, 0, 0.165, 0).scale.y = 1.7;
+      break;
+    case 'flowers':
+      for (const [x, z, mat] of [[0, 0, m.petal], [0.05, 0.03, m.petal2], [-0.05, 0.02, m.petal2]] as const) {
+        mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.14, 5), m.stem, x, 0.07, z);
+        mesh(new THREE.SphereGeometry(0.03, 8, 6), mat, x, 0.15, z);
+      }
+      break;
+    case 'noodles':
+      mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.11, 14), m.cup, 0, 0.055, 0);
+      mesh(new THREE.CylinderGeometry(0.0505, 0.046, 0.03, 14), m.cupBand, 0, 0.06, 0);
+      break;
+    case 'rug':
+      mesh(new THREE.BoxGeometry(0.22, 0.012, 0.15), m.rug, 0, 0.006, 0);
+      mesh(new THREE.BoxGeometry(0.22, 0.014, 0.02), m.rugStripe, 0, 0.007, -0.035);
+      mesh(new THREE.BoxGeometry(0.22, 0.014, 0.02), m.rugStripe, 0, 0.007, 0.035);
+      break;
+    case 'diamond':
+      mesh(new THREE.OctahedronGeometry(0.055, 0), m.diamond, 0, 0.075, 0).scale.set(1, 1.3, 1);
+      break;
+    case 'copium':
+      mesh(new THREE.CapsuleGeometry(0.035, 0.1, 4, 10), m.tank, 0, 0.085, 0);
+      mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.04, 8), m.steel, 0, 0.18, 0);
+      break;
+    default:
+      return null;
+  }
+  return p;
 }

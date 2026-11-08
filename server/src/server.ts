@@ -7,9 +7,11 @@ import type { Config } from './config.ts';
 import type { Logger } from './log.ts';
 import { RoomManager, type Player } from './rooms.ts';
 import { openDb, type Db } from './db.ts';
-import { GraveService, parseTierPrices } from './graves.ts';
+import { GraveService, parsePrice } from './graves.ts';
 import { createApi } from './api.ts';
-import { createNearRpc, fetchFtMetadata, toUnits, verifyFtTransfer, viewFunction, type MetadataResult, type TransferCheck, type TransferResult } from './near.ts';
+import { MemorialMinter, nearMemorialChain, type MemorialChain } from './minter.ts';
+import { createNftRoutes } from './nft.ts';
+import { createNearRpc, fetchFtMetadata, verifyFtTransfer, viewFunction, type MetadataResult, type TransferCheck, type TransferResult } from './near.ts';
 import {
   MAX_CLIENT_MESSAGE_BYTES, PROTOCOL_VERSION, parseClientMessage, sanitizeChat, sanitizeName,
   type ClientMessage, type ErrorCode, type ServerMessage, type SnapshotEntry,
@@ -39,6 +41,8 @@ export interface GameServer {
 export interface ServerOptions {
   near?: { lookup(contract: string): Promise<MetadataResult>; verify(c: TransferCheck): Promise<TransferResult> };
   db?: Db;
+  /** Replaces the Memorial NFT contract (turns minting on with minter id "minter.test"). */
+  memorialChain?: MemorialChain;
 }
 
 // Rate limit: a steady 40 messages/s with bursts of 60 (state updates are sent at 15/s).
@@ -65,19 +69,33 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
   const rooms = new RoomManager({ capacity: cfg.roomCapacity, maxRooms: cfg.maxRooms, graceMs: cfg.reconnectGraceMs });
   const db = opts.db ?? openDb(cfg.dbPath);
   const rpc = createNearRpc(cfg.nearRpcUrls);
-  const prices = parseTierPrices(cfg.gravePricesWth, cfg.wthDecimals, toUnits);
+  const mintingConfigured = !!(cfg.nftContract && cfg.minterAccountId && cfg.minterPrivateKey);
   const broadcastAll = (msg: ServerMessage) => {
     const data = JSON.stringify(msg);
     for (const c of clients) if (c.playerId && c.ws.readyState === WebSocket.OPEN) c.ws.send(data);
   };
   const graves = new GraveService({
     db, log: log.child({ mod: 'graves' }), token: cfg.wthContract, receiver: cfg.treasury, decimals: cfg.wthDecimals,
-    tierUnits: prices.units, tierWhole: prices.whole, holdMinutes: cfg.holdMinutes,
+    gravePrice: parsePrice('GRAVE_PRICE_WTH', cfg.gravePriceWth, cfg.wthDecimals),
+    offeringMin: parsePrice('OFFERING_MIN_WTH', cfg.offeringMinWth, cfg.wthDecimals),
+    holdMinutes: cfg.holdMinutes, nftContract: cfg.nftContract, mintingEnabled: mintingConfigured || !!opts.memorialChain,
     lookupNear: opts.near?.lookup ?? ((contract) => fetchFtMetadata(rpc, contract)),
     verify: opts.near?.verify ?? ((check) => verifyFtTransfer(rpc, check)),
     onGraveAdded: (grave) => broadcastAll({ t: 'grave_added', grave }),
     onReservedChanged: (reserved) => broadcastAll({ t: 'plots_reserved', reserved }),
+    onGraveUpdated: (grave, offering) => broadcastAll({ t: 'grave_updated', grave, offering }),
+    onMemorialQueued: () => kickMinter(),
   });
+  // Memorial NFT minting (memorials queue in the db and mint once this is configured)
+  const memorialChain = opts.memorialChain ?? (mintingConfigured
+    ? nearMemorialChain({ rpc, rpcUrls: cfg.nearRpcUrls, contract: cfg.nftContract!, minterId: cfg.minterAccountId!, privateKey: cfg.minterPrivateKey! })
+    : null);
+  const minter = memorialChain
+    ? new MemorialMinter({ db, log: log.child({ mod: 'minter' }), graves, chain: memorialChain, minterId: opts.memorialChain ? 'minter.test' : cfg.minterAccountId! })
+    : null;
+  if (!minter) log.warn('Memorial NFT minting is off (set NFT_CONTRACT, MINTER_ACCOUNT_ID, MINTER_PRIVATE_KEY) — memorials queue until it is on');
+  function kickMinter() { void minter?.run().catch((err) => log.error('memorial minting failed', { err })); }
+  const nft = createNftRoutes(graves, log.child({ mod: 'nft' }), cfg.publicBaseUrl, cfg.nftContract);
   const clientIp = (req: http.IncomingMessage) =>
     (cfg.trustProxy ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0]?.trim() : '') || req.socket.remoteAddress || '?';
   const api = createApi(graves, log.child({ mod: 'api' }), clientIp, async (account) => {
@@ -224,6 +242,7 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
   const httpServer = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     if (await api(req, res, url)) return;
+    if (nft(req, res, url)) return;
     if (url.pathname === '/healthz') {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       res.end(JSON.stringify({
@@ -303,6 +322,8 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
     graves.sweep(Date.now()).catch((err) => log.error('payment sweep failed', { err })).finally(() => { sweeping = false; });
   }, 15000);
   void graves.sweep(Date.now()).catch((err) => log.error('payment sweep failed', { err }));
+  const mintTimer = setInterval(kickMinter, 20000);
+  kickMinter();
 
   const heartbeat = setInterval(() => {
     for (const c of clients) {
@@ -325,7 +346,7 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
     rooms,
     graves,
     close: () => new Promise<void>((resolve) => {
-      clearInterval(tick); clearInterval(sweeper); clearInterval(heartbeat); clearInterval(paymentSweep);
+      clearInterval(tick); clearInterval(sweeper); clearInterval(heartbeat); clearInterval(paymentSweep); clearInterval(mintTimer);
       for (const c of clients) c.ws.close(1001, 'server shutting down');
       wss.close();
       httpServer.close(() => { if (!opts.db) db.close(); resolve(); });

@@ -1,0 +1,24 @@
+[package]
+name = "rip-memorial"
+version = "0.1.0"
+edition = "2021"
+description = "REST IN PUMP Memorial NFTs (NEP-171): one per wallet per grave, minted by the game server."
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "=5.29.1"
+near-contract-standards = "=5.29.1"
+
+[dev-dependencies]
+near-sdk = { version = "=5.29.1", features = ["unit-testing"] }
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true

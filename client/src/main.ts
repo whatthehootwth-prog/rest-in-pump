@@ -15,9 +15,12 @@ import { NameTag } from './ui/nametag.ts';
 import { Landing } from './ui/landing.ts';
 import { GraveField, type PlotFocus } from './world/graves.ts';
 import { PlotCard } from './ui/plotcard.ts';
-import { BuryDialog } from './ui/bury.ts';
+import { CreateGraveDialog } from './ui/creategrave.ts';
+import { OfferingDialog } from './ui/offering.ts';
+import { pendingPayment } from './ui/payflow.ts';
+import { itemName, levelName } from '../../shared/graves.ts';
 import { Wallet } from './wallet/wallet.ts';
-import { api } from './net/api.ts';
+import { api, ApiError } from './net/api.ts';
 import { shortAccount } from './ui/dom.ts';
 import { prefs, sessionState } from './util/storage.ts';
 
@@ -74,7 +77,7 @@ async function main() {
   const loadGraves = () => api.graves().then((g) => { graves.setGraves(g.graves); graves.setReserved(g.reserved); }).catch((e) => console.warn('graves', e));
   void loadGraves();
 
-  // ---- wallet (top right) + burying
+  // ---- wallet (top right), graves and offerings
   const wallet = new Wallet();
   const walletBtn = document.getElementById('wallet-btn') as HTMLButtonElement;
   const walletMenu = document.getElementById('wallet-menu') as HTMLElement;
@@ -96,8 +99,9 @@ async function main() {
   document.getElementById('wallet-disconnect')!.addEventListener('click', () => void wallet.disconnect());
   document.addEventListener('click', (e) => { if (!walletMenu.hidden && !(e.target as HTMLElement).closest('.wallet-wrap')) walletMenu.hidden = true; });
   void wallet.restore();
-  const bury = new BuryDialog(wallet, (t) => hud.toast(t));
-  const plotCard = new PlotCard((plot) => void bury.open(plot));
+  const createGrave = new CreateGraveDialog(wallet, (t) => hud.toast(t));
+  const offering = new OfferingDialog(wallet, (t) => hud.toast(t));
+  const plotCard = new PlotCard(wallet, (plot) => void createGrave.open(plot), (g) => void offering.open(graves.grave(g.id) ?? g));
   let focus: PlotFocus | null = null;
   const remotes = new RemotePlayers(world.scene);
   input.bindTouchButtons(document);
@@ -140,7 +144,7 @@ async function main() {
   c.onStatus((s) => {
     hud.setStatus(s);
     chat.setConnected(s.kind === 'connected');
-    plotCard.canBury = s.kind === 'connected';
+    plotCard.canAct = s.kind === 'connected';
     if (s.kind === 'outdated' || s.kind === 'refused') remotes.clear();
   });
   c.onMessage((m: ServerMessage) => {
@@ -194,7 +198,14 @@ async function main() {
         break;
       case 'grave_added':
         graves.addGrave(m.grave);
-        chat.system(`${m.grave.meme.symbol} was laid to rest in grave #${m.grave.plot} by ${shortAccount(m.grave.creator)}.`);
+        chat.system(`${shortAccount(m.grave.creator)} created a grave for $${m.grave.meme.symbol} at plot #${m.grave.plot}.`);
+        break;
+      case 'grave_updated':
+        graves.addGrave(m.grave);
+        offering.graveUpdated(m.grave);
+        plotCard.invalidate(m.grave.id);
+        chat.system(`${shortAccount(m.offering.payer)} left ${itemName(m.offering.item).toLowerCase()} at $${m.grave.meme.symbol}.`);
+        if (m.offering.levelUp) chat.system(`$${m.grave.meme.symbol} is now a Level ${m.grave.level} ${levelName(m.grave.level)}.`);
         break;
       case 'plots_reserved': graves.setReserved(m.reserved); break;
       case 'snapshot': remotes.applySnapshot(m.ts, m.s); break;
@@ -229,11 +240,29 @@ async function main() {
     cam.follow();
     canvas.focus();
     c.start();
-    // finish a grave payment interrupted by a refresh or a wallet redirect
+    // finish a payment (grave or offering) interrupted by a refresh or a wallet redirect
     const q = new URLSearchParams(location.search);
     const hash = q.get('transactionHashes')?.split(',').pop() ?? null;
     if (q.has('transactionHashes') || q.has('errorCode') || q.has('account_id')) history.replaceState(null, '', location.pathname);
-    void bury.recover(hash ? { hash, account: q.get('account_id') } : null);
+    void recoverPayment(hash ? { hash, account: q.get('account_id') } : null);
+  };
+  const recoverPayment = async (redirectTx: { hash: string; account: string | null } | null) => {
+    const id = pendingPayment.get();
+    if (!id) return;
+    let p;
+    try { p = await api.payment(id); } catch (e) {
+      if (e instanceof ApiError && e.status === 404) pendingPayment.clear();
+      return;
+    }
+    if (p.status === 'fulfilled') {
+      pendingPayment.clear();
+      hud.toast(p.kind === 'grave' ? `Your $${p.meme.symbol} grave at plot #${p.plot} is ready.` : `Your offering at $${p.meme.symbol} was received.`);
+      return;
+    }
+    if (p.status === 'failed' || p.status === 'expired') { pendingPayment.clear(); return; }
+    if (p.status === 'confirming') hud.toast('Still confirming your payment on NEAR…');
+    if (p.kind === 'grave') await createGrave.resume(p, redirectTx);
+    else await offering.resume(p, redirectTx);
   };
   const landing = new Landing(enterWorld);
   // a refresh while already in the world (session still alive) goes straight back in

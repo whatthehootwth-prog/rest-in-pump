@@ -25,10 +25,19 @@ export interface Config {
   wthContract: string;
   wthDecimals: number;
   treasury: string;
-  /** Whole-WTH price per grave tier, comma separated (tier 1..4). */
-  gravePricesWth: string;
-  /** How long a plot + meme stay reserved while the player pays. */
+  /** Whole-WTH price to create a grave. */
+  gravePriceWth: string;
+  /** Minimum whole-WTH amount per offering. */
+  offeringMinWth: string;
+  /** How long a plot + meme stay reserved (and an offering stays open) while the player pays. */
   holdMinutes: number;
+  /** Memorial NFTs. Minting runs only when all three are set; otherwise memorials queue until it is. */
+  nftContract: string | null;
+  minterAccountId: string | null;
+  /** ed25519:... key of minterAccountId. Never logged. */
+  minterPrivateKey: string | null;
+  /** Public origin of the game, e.g. https://restinpump.com (the NFT contract's base_uri is <this>/nft). */
+  publicBaseUrl: string | null;
 }
 
 function int(env: NodeJS.ProcessEnv, key: string, def: number, min: number, max: number): number {
@@ -49,6 +58,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (!['debug', 'info', 'warn', 'error'].includes(level)) throw new Error(`Invalid LOG_LEVEL="${env.LOG_LEVEL}"`);
   // the built client (npm run build). Set STATIC_DIR="" to disable, e.g. when a CDN serves the files.
   const staticDir = env.STATIC_DIR === undefined ? 'dist/client' : env.STATIC_DIR || null;
+  if (env.GRAVE_PRICES_WTH) throw new Error('GRAVE_PRICES_WTH was replaced by GRAVE_PRICE_WTH (one price; graves now evolve with offerings)');
+  const opt = (key: string) => (env[key] ?? '').trim() || null;
+  const nftContract = opt('NFT_CONTRACT'), minterAccountId = opt('MINTER_ACCOUNT_ID'), minterPrivateKey = opt('MINTER_PRIVATE_KEY');
+  const publicBaseUrl = opt('PUBLIC_BASE_URL')?.replace(/\/+$/, '') ?? null;
+  const mintVars = [nftContract, minterAccountId, minterPrivateKey];
+  if (mintVars.some(Boolean) && !mintVars.every(Boolean)) {
+    throw new Error('Memorial minting needs NFT_CONTRACT, MINTER_ACCOUNT_ID and MINTER_PRIVATE_KEY together (or none of them)');
+  }
+  if (minterPrivateKey && !/^ed25519:[1-9A-HJ-NP-Za-km-z]{40,100}$/.test(minterPrivateKey)) throw new Error('MINTER_PRIVATE_KEY must look like ed25519:<base58>');
+  if (nftContract && !publicBaseUrl) throw new Error('PUBLIC_BASE_URL is needed when minting is on (NFT metadata links point to it)');
+  if (publicBaseUrl && !/^https?:\/\/[^/\s]+$/.test(publicBaseUrl)) throw new Error('PUBLIC_BASE_URL must be an origin like https://restinpump.com');
   return {
     port: int(env, 'PORT', 8787, 0, 65535),
     host: env.HOST ?? (production ? '0.0.0.0' : '127.0.0.1'),
@@ -66,7 +86,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     wthContract: env.WTH_CONTRACT ?? 'wth-0b2227.launchpad.justhoot.near',
     wthDecimals: int(env, 'WTH_DECIMALS', 18, 0, 40),
     treasury: env.TREASURY_ACCOUNT ?? 'whatthehoot.near',
-    gravePricesWth: env.GRAVE_PRICES_WTH ?? '75000,370000,740000,3700000',
+    gravePriceWth: env.GRAVE_PRICE_WTH ?? '75000',
+    offeringMinWth: env.OFFERING_MIN_WTH ?? '10000',
     holdMinutes: int(env, 'HOLD_MINUTES', 15, 1, 120),
+    nftContract, minterAccountId, minterPrivateKey, publicBaseUrl,
   };
 }

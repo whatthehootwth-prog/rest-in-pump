@@ -112,6 +112,8 @@ export type ServerMessage =
   | { t: 'rooms'; rooms: RoomSummary[] }
   | { t: 'chat'; id: string; name: string; text: string; ts: number }
   | { t: 'grave_added'; grave: GraveInfo }
+  /** A grave got a new offering. levelUp: it just reached a new memorial level. */
+  | { t: 'grave_updated'; grave: GraveInfo; offering: { item: string; payer: string; levelUp: boolean } }
   | { t: 'plots_reserved'; reserved: number[] }
   | { t: 'error'; code: ErrorCode; message: string; fatal: boolean }
   | { t: 'pong'; n: number };

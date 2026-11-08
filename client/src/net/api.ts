@@ -1,4 +1,4 @@
-import type { ChainId, GraveInfo, GraveTier, GravesSnapshot, MemeInfo, PaymentView, PriceConfig } from '../../../shared/graves.ts';
+import type { ChainId, GraveDetail, GraveInfo, GravesSnapshot, MemeInfo, OfferingItem, PaymentView, PriceConfig } from '../../../shared/graves.ts';
 
 export class ApiError extends Error {
   readonly code: string;
@@ -37,7 +37,10 @@ export const api = {
   graves: () => request<GravesSnapshot>('GET', '/graves'),
   meme: (chain: ChainId, contract: string) =>
     request<{ meme: MemeInfo; grave: GraveInfo | null }>('GET', `/meme?chain=${encodeURIComponent(chain)}&contract=${encodeURIComponent(contract)}`),
-  createPayment: (b: { plot: number; chain: ChainId; contract: string; tier: GraveTier; message: string }) => request<PaymentView>('POST', '/payments', b),
+  grave: (id: number, account: string | null) =>
+    request<GraveDetail>('GET', `/graves/${id}${account ? `?account=${encodeURIComponent(account)}` : ''}`),
+  createGrave: (b: { plot: number; chain: ChainId; contract: string; message: string }) => request<PaymentView>('POST', '/payments', b),
+  createOffering: (b: { graveId: number; item: OfferingItem; amount: string }) => request<PaymentView>('POST', '/offerings', b),
   payment: (id: string) => request<PaymentView>('GET', `/payments/${encodeURIComponent(id)}`),
   confirm: (id: string, txHash: string, accountId: string) => request<PaymentView>('POST', `/payments/${encodeURIComponent(id)}/confirm`, { txHash, accountId }),
   cancel: (id: string) => request<PaymentView>('POST', `/payments/${encodeURIComponent(id)}/cancel`, {}),

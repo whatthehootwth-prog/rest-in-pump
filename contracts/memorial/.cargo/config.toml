@@ -1,0 +1,3 @@
+# near-sdk needs --cfg near for wasm builds (real host functions instead of local fallbacks); -s strips symbols.
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg", "near", "-C", "link-arg=-s"]

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0e0d12">
-  <meta name="description" content="Welcome to the graveyard of fallen memecoins. Explore with other degens, bury your dead bags, and leave ridiculous offerings to honor your losses.">
+  <meta name="description" content="Welcome to the graveyard of fallen memecoins. Explore with other degens, visit the graves, and leave ridiculous offerings to keep their memory alive.">
   <title>R.I.P - Rest In Pump</title>
   <link rel="icon" href="/logo-32.png" sizes="32x32" type="image/png">
   <link rel="icon" href="/logo-64.png" sizes="64x64" type="image/png">
@@ -23,7 +23,7 @@
     <div class="landing-inner">
       <img class="landing-logo" src="/logo-256.png" width="148" height="148" alt="">
       <h1 id="landing-title" class="landing-title">Rest In Pump</h1>
-      <p class="landing-desc">Welcome to the graveyard of fallen memecoins. Explore with other degens, bury your dead bags, and leave ridiculous offerings to honor your losses.</p>
+      <p class="landing-desc">Welcome to the graveyard of fallen memecoins. Explore with other degens, visit the graves, and leave ridiculous offerings to keep their memory alive.</p>
       <div class="landing-actions">
         <button id="enter-btn" class="btn btn-lg" type="button">Enter the Meme Graveyard</button>
         <button id="about-btn" class="btn btn-lg btn-quiet" type="button"><span class="q" aria-hidden="true">?</span>What is Rest In Pump?</button>
@@ -49,17 +49,31 @@
         <li><b>Mourn properly:</b> dance, club, pray (拜拜), kneel and cry, or roll around on the ground.</li>
         <li><b>Chat</b> with everyone in the graveyard and see it pop up above their heads.</li>
         <li><b>Take a snapshot</b> of the funeral and share it.</li>
+        <li><b>Create a grave</b> for a fallen NEAR memecoin on an empty plot, paid in $WTH. Each meme gets one grave, and it stays for everyone to visit.</li>
+        <li><b>Leave offerings:</b> a candle, instant noodles, a copium tank… plus any amount of $WTH from 10,000 up. Every offering keeps the memory alive.</li>
       </ul>
+    </section>
+    <section>
+      <h3>Graves that grow</h3>
+      <p class="small">Each successful offering adds one to a grave's community count — the amount of $WTH doesn't change the count. Graves evolve at milestones:</p>
+      <ul class="about-list levels">
+        <li><b>Level 1 · Forgotten Grave</b> — under 10 offerings</li>
+        <li><b>Level 2 · Remembered Grave</b> — 10 to 99</li>
+        <li><b>Level 3 · Honored Grave</b> — 100 to 999</li>
+        <li><b>Level 4 · Legendary Grave</b> — 1,000 and up</li>
+      </ul>
+    </section>
+    <section>
+      <h3>Memorial NFTs</h3>
+      <p class="small">The first time your wallet makes a successful offering to a grave, you receive that grave's Memorial NFT on NEAR, like “$RUG — Memorial #001”. One per wallet per grave, however many offerings you make. Every memorial of a grave evolves with it: its artwork and details always show the grave's current level and offering count.</p>
+      <p class="muted small">Creating a grave does not mint one — creators earn theirs with an offering like everyone else. Nobody owns a grave; it belongs to the graveyard. Memorials are keepsakes: no staking, no yield, no rewards.</p>
     </section>
     <section>
       <h3>Coming soon <span class="tag">not live yet</span></h3>
       <ul class="about-list">
-        <li><b>Bury a meme:</b> give your dead bag a grave of its own that stays in the graveyard for everyone to find.</li>
-        <li><b>Funerals and offerings:</b> leave ridiculous offerings at a grave, paid in $WTH and verified on NEAR.</li>
-        <li><b>Grave search:</b> find any buried coin and visit it.</li>
-        <li><b>Resurrections:</b> if a buried coin pumps back from the dead, its grave will know.</li>
+        <li><b>Memes from other chains:</b> Solana, Base and Ethereum graves. Only NEAR memes can have graves today.</li>
+        <li><b>Grave search:</b> find any meme's grave and walk to it.</li>
       </ul>
-      <p class="muted small">None of this is switched on yet, and nothing in the game asks for money today.</p>
     </section>
     <section>
       <h3>Controls</h3>
@@ -157,7 +171,7 @@
         <dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Dance, club, pray, cry, roll</dd>
         <dt><kbd>P</kbd></dt><dd>Save a snapshot</dd>
         <dt><kbd>Enter</kbd></dt><dd>Chat</dd>
-        <dt><kbd>E</kbd></dt><dd>Bury a meme at an empty grave</dd>
+        <dt><kbd>E</kbd></dt><dd>Create a grave at an empty plot, or leave an offering at a grave</dd>
         <dt>Drag, <kbd>Q</kbd> <kbd>E</kbd></dt><dd>Turn camera</dd>
         <dt>Scroll</dt><dd>Zoom</dd>
       </dl>
@@ -166,14 +180,24 @@
     <p class="muted small">Connection: <span id="net-detail">—</span></p>
   </dialog>
 
-  <dialog id="bury" aria-labelledby="bury-title">
+  <dialog id="grave-dlg" aria-labelledby="grave-title">
     <div class="dialog-head">
-      <h2 id="bury-title">Bury a meme</h2>
-      <button id="bury-close" class="icon-btn" type="button" aria-label="Close">
+      <h2 id="grave-title">Create a grave</h2>
+      <button id="grave-close" class="icon-btn" type="button" aria-label="Close">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg>
       </button>
     </div>
-    <div id="bury-body" class="bury-body"></div>
+    <div id="grave-body" class="dlg-body"></div>
+  </dialog>
+
+  <dialog id="offer-dlg" aria-labelledby="offer-title">
+    <div class="dialog-head">
+      <h2 id="offer-title">Leave an offering</h2>
+      <button id="offer-close" class="icon-btn" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg>
+      </button>
+    </div>
+    <div id="offer-body" class="dlg-body"></div>
   </dialog>
 
   <div id="fatal" class="fatal" role="alert" hidden></div>

@@ -1,19 +1,49 @@
 /**
- * Graves: the plot layout, tombstone tiers and the shapes exchanged by the grave API.
- * Shared by client and server so both agree on plot ids, positions and limits.
+ * Graves, offerings and Memorial NFTs: plot layout, memorial levels, offering items and the shapes
+ * exchanged by the API. Shared by client and server so both agree on ids, positions and limits.
+ *
+ * "Every offering keeps the memory alive." A grave represents a memecoin. Visitors leave paid offerings
+ * in WTH; each successful offering adds one to the grave's community count, and the grave evolves at
+ * milestones. A wallet's first successful offering to a grave earns it that grave's Memorial NFT, and all
+ * memorials of a grave evolve with it. No staking, yield, rewards or token burning.
  */
 
-/** Grave tiers. The WTH price of each tier is set in server config (GRAVE_PRICES_WTH). */
-export const GRAVE_TIERS = [
-  { tier: 1, usd: 1, name: 'Wooden Cross' },
-  { tier: 2, usd: 5, name: 'Classic Headstone' },
-  { tier: 3, usd: 10, name: 'Grand Tombstone' },
-  { tier: 4, usd: 50, name: 'Mausoleum' },
+/** Memorial levels, reached by the community offering count (number of successful offerings, not WTH). */
+export const GRAVE_LEVELS = [
+  { level: 1, name: 'Forgotten Grave', min: 0 },
+  { level: 2, name: 'Remembered Grave', min: 10 },
+  { level: 3, name: 'Honored Grave', min: 100 },
+  { level: 4, name: 'Legendary Grave', min: 1000 },
 ] as const;
-export type GraveTier = 1 | 2 | 3 | 4;
-export const isTier = (v: unknown): v is GraveTier => v === 1 || v === 2 || v === 3 || v === 4;
+export type GraveLevel = 1 | 2 | 3 | 4;
+export function levelFor(offerings: number): GraveLevel {
+  let lvl: GraveLevel = 1;
+  for (const l of GRAVE_LEVELS) if (offerings >= l.min) lvl = l.level;
+  return lvl;
+}
+export const levelName = (l: GraveLevel) => GRAVE_LEVELS[l - 1].name;
+/** Offerings still needed for the next level (null at the top). */
+export function nextLevelIn(offerings: number): number | null {
+  const next = GRAVE_LEVELS.find((l) => l.min > offerings);
+  return next ? next.min - offerings : null;
+}
+
+/** Things visitors can leave at a grave. Purely decorative: the WTH amount is chosen separately. */
+export const OFFERING_ITEMS = [
+  { id: 'candle', name: 'Candle' },
+  { id: 'flowers', name: 'Flowers' },
+  { id: 'noodles', name: 'Instant noodles' },
+  { id: 'rug', name: 'A rug' },
+  { id: 'diamond', name: 'Diamond hands' },
+  { id: 'copium', name: 'Copium tank' },
+] as const;
+export type OfferingItem = (typeof OFFERING_ITEMS)[number]['id'];
+export const isOfferingItem = (v: unknown): v is OfferingItem => OFFERING_ITEMS.some((i) => i.id === v);
+export const itemName = (id: string) => OFFERING_ITEMS.find((i) => i.id === id)?.name ?? id;
 
 export const MESSAGE_MAX = 100;
+/** How many recent offering items are shown around a grave. */
+export const RECENT_ITEMS = 6;
 
 /** Chains a meme can live on. Only NEAR resolves today; the others are planned. */
 export const CHAINS = [
@@ -25,6 +55,7 @@ export const CHAINS = [
 export type ChainId = (typeof CHAINS)[number]['id'];
 export const isChain = (v: unknown): v is ChainId => CHAINS.some((c) => c.id === v);
 export const chainLive = (c: ChainId) => CHAINS.find((x) => x.id === c)?.live === true;
+export const chainName = (c: string) => CHAINS.find((x) => x.id === c)?.name ?? c;
 
 /** NEAR account ids (named or 64-hex implicit), 2-64 chars, lowercase. */
 export const NEAR_ACCOUNT_RE = /^(?=.{2,64}$)(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
@@ -64,21 +95,30 @@ export interface MemeInfo {
 export interface GraveInfo {
   id: number;
   plot: number;
-  tier: GraveTier;
   meme: MemeInfo;
   message: string;
-  /** NEAR account that paid for the grave. */
+  /** NEAR account that paid to create the grave (creating a grave does not mint an NFT). */
   creator: string;
   createdAt: number;
+  /** Community offering count (successful offerings). */
+  offerings: number;
+  level: GraveLevel;
+  /** Most recent offering items, newest first (for decoration). */
+  recentItems: string[];
 }
 
 export interface PriceConfig {
   token: string;
   receiver: string;
   decimals: number;
-  /** Whole-WTH price per tier, as decimal strings (exact). */
-  tiers: Record<GraveTier, string>;
+  /** Whole-WTH price to create a grave, exact decimal string. */
+  gravePrice: string;
+  /** Minimum whole-WTH amount per offering. */
+  offeringMin: string;
   holdMinutes: number;
+  /** Whether Memorial NFT minting is switched on (contract + minter configured on the server). */
+  mintingEnabled: boolean;
+  nftContract: string | null;
 }
 
 export interface GravesSnapshot {
@@ -88,9 +128,21 @@ export interface GravesSnapshot {
 }
 
 export type PaymentStatus = 'pending' | 'confirming' | 'fulfilled' | 'expired' | 'failed' | 'unfulfillable';
+export type MemorialStatus = 'pending' | 'minting' | 'minted' | 'failed';
+
+export interface MemorialView {
+  graveId: number;
+  account: string;
+  status: MemorialStatus;
+  tokenId: string | null;
+  /** Memorial number within its grave (#001…), known once minted. */
+  serial: number | null;
+  error: string | null;
+}
 
 export interface PaymentView {
   id: string;
+  kind: 'grave' | 'offering';
   memo: string;
   status: PaymentStatus;
   /** Required amount in the token's smallest unit (yocto-WTH), decimal string. */
@@ -98,14 +150,29 @@ export interface PaymentView {
   token: string;
   receiver: string;
   plot: number;
-  tier: GraveTier;
   meme: MemeInfo;
+  /** Grave: the creator's message. Offering: unused (see item). */
   message: string;
+  /** Offering only. */
+  graveId: number | null;
+  item: string | null;
   expiresAt: number;
   txHash: string | null;
   payer: string | null;
   error: string | null;
   grave: GraveInfo | null;
+  /** Offering only: the payer's memorial for this grave (if any). */
+  memorial: MemorialView | null;
+}
+
+export interface GraveDetail {
+  grave: GraveInfo;
+  recent: { item: string; payer: string; amount: string; at: number }[];
+  memorials: number;
+  /** The asking wallet's memorial, if an account was given. */
+  mine: MemorialView | null;
+  /** How many offerings the asking wallet made to this grave. */
+  myOfferings: number;
 }
 
 /** Formats a smallest-unit amount (decimal string) as whole tokens with thousands separators. */
@@ -115,4 +182,12 @@ export function formatUnits(amount: string, decimals: number, maxFraction = 2): 
   const whole = digits.slice(0, digits.length - decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   const frac = digits.slice(digits.length - decimals).slice(0, maxFraction).replace(/0+$/, '');
   return (neg ? '-' : '') + whole + (frac ? '.' + frac : '');
+}
+
+/** "75000" / "12.5" whole tokens -> smallest unit (exact). Throws on bad input. */
+export function parseUnits(whole: string, decimals: number): bigint {
+  if (!/^\d{1,15}(\.\d+)?$/.test(whole)) throw new Error(`bad amount "${whole}"`);
+  const [i, f = ''] = whole.split('.');
+  if (f.length > decimals) throw new Error(`too many decimals in "${whole}"`);
+  return BigInt(i) * 10n ** BigInt(decimals) + BigInt(f.padEnd(decimals, '0') || '0');
 }
