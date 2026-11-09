@@ -8,7 +8,7 @@ A multiplayer cartoon graveyard. Players walk around as the owl mascot and see e
 |---|---|
 | 3D world + owl character | Done (ported from the prototype, unchanged look) |
 | Multiplayer (rooms, sync, reconnect) | **Done — phase 1** (see "What is verified") |
-| Graves: create a grave for a meme on an empty plot, paid in NEAR ($0.01 at the live price), verified on chain | **Built** — server tested; a real-wallet payment has not been made through the game yet |
+| Graves: create a grave for a meme on an empty plot, paid in NEAR ($1 at the live price), verified on chain | **Built** — server tested; a real-wallet payment has not been made through the game yet |
 | Offerings, memorial levels (graves evolve with the community offering count) | **Built** — same payment flow, server + browser tested |
 | Memorial NFTs (NEP-171 contract + server minter + live metadata/artwork) | **Built, not deployed** — contract tested as compiled wasm; deploy to `memorial.whatthehoot.near` is yours (below) |
 | Grave search, memes on other chains (Solana / Base / Ethereum) | Not started |
@@ -114,13 +114,13 @@ TODO.md                roadmap checklist
 - 40 plots (5 rows x 8, `shared/graves.ts`). Walking up to one highlights the whole plot; **E** opens "Create a grave".
 - The player pastes a NEAR token contract; the server reads name, symbol and logo with `ft_metadata`. Only inline
   `data:` logos are shown (remote image URLs are ignored for safety).
-- One price for every grave in USD (`GRAVE_PRICE_USD`, default $0.01), paid in NEAR at the live NEAR price. Last words:
+- One price for every grave in USD (`GRAVE_PRICE_USD`, default $1), paid in NEAR at the live NEAR price. Last words:
   1–100 characters. One grave per meme contract, ever. Graves cannot be removed.
 - Creating a grave does **not** mint an NFT. The creator gets a memorial by making an offering like anyone else.
 
 **Offerings**
 - At a grave, **E** opens "Leave an offering": a funny item (candle, flowers, instant noodles, a rug, diamond hands,
-  copium tank) plus any NEAR amount worth at least `OFFERING_MIN_USD` (default $0.01).
+  copium tank) plus any NEAR amount worth at least `OFFERING_MIN_USD` (default $0.10; it must stay above the ~0.01 NEAR each new Memorial NFT costs in storage).
 - The grave's **community offering count** is the number of successful offerings — not NEAR spent. Each verified
   payment adds exactly one (one payment row → at most one offering row, enforced by a unique key). Failed,
   underpaid, reused or repeated confirmations never count.
@@ -221,7 +221,7 @@ consequences in some countries; get advice before announcing it.
   memorials and payments are in SQLite (`DB_PATH`, default `data/rip.sqlite`) and survive restarts. Put it on a
   persistent disk and back it up.
 - The payment verifier is tested against NEAR's documented response format, not yet against a real payment made
-  through the game. Make one small real offering ($0.01 in NEAR) before launch.
+  through the game. Make one small real offering ($0.10 in NEAR) before launch.
 - The Memorial NFT contract is tested by running the compiled wasm against a mocked NEAR host (`contract.test.ts`),
   and the minter against a fake chain. It has not been deployed yet; run the testnet trial above first.
 - Memorial metadata is served by this game server; if it is down, wallets can't load the artwork/attributes

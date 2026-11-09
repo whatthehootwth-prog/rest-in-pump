@@ -11,7 +11,7 @@ import { memeChip } from './creategrave.ts';
 const MINT_POLL_MS = 3000;
 const MINT_POLL_FOR_MS = 3 * 60_000;
 /** Quick picks, in USD (converted to NEAR at the current price). */
-const QUICK_USD = ['0.01', '0.1', '1'];
+const QUICK_USD = ['0.1', '1', '5'];
 /** yoctoNEAR -> plain decimal string for the input ("0.003571"). */
 const nearInput = (yocto: bigint | string) => formatUnits(BigInt(yocto).toString(), 24, 6).replace(/,/g, '');
 
@@ -101,8 +101,8 @@ export class OfferingDialog {
     if (!this.config) return null;
     const raw = this.amount.replace(/[,\s]/g, '');
     let v: bigint;
-    if (!/^\d{1,9}(\.\d{1,6})?$/.test(raw)) { this.amountError = 'Enter a NEAR amount, like 0.01 (up to 6 decimals).'; return null; }
-    try { v = parseUnits(raw, 24); } catch { this.amountError = 'Enter a NEAR amount, like 0.01.'; return null; }
+    if (!/^\d{1,9}(\.\d{1,6})?$/.test(raw)) { this.amountError = 'Enter a NEAR amount, like 0.05 (up to 6 decimals).'; return null; }
+    try { v = parseUnits(raw, 24); } catch { this.amountError = 'Enter a NEAR amount, like 0.05.'; return null; }
     const min = this.config.offeringMin;
     if (!min) { this.amountError = 'Could not get the NEAR price right now. Try again in a minute.'; return null; }
     if (v < BigInt(min)) { this.amountError = `The minimum offering is ${nearLabel(min)} (about $${this.config.offeringMinUsd}).`; return null; }
@@ -188,7 +188,7 @@ export class OfferingDialog {
       }, itemArt(it.id), h('span', {}, it.name))));
     const input = h('input', {
       id: 'offer-amount', inputmode: 'decimal', autocomplete: 'off', value: this.amount, disabled: !editable,
-      placeholder: cfg.offeringMin ? nearInput(cfg.offeringMin) : '0.01', 'aria-describedby': 'offer-amount-msg', 'aria-label': 'NEAR amount',
+      placeholder: cfg.offeringMin ? nearInput(cfg.offeringMin) : '0.05', 'aria-describedby': 'offer-amount-msg', 'aria-label': 'NEAR amount',
       oninput: (e: Event) => { this.amount = (e.target as HTMLInputElement).value; },
       onkeydown: (e: Event) => { if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); this.pay(); } },
     });

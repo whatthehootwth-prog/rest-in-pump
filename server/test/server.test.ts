@@ -203,7 +203,7 @@ describe('game server', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const json = async (r: Response): Promise<any> => r.json();
     const post = (path: string, body: unknown) => fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    expect(await json(await fetch(base + '/config'))).toMatchObject({ currency: 'NEAR', gravePriceUsd: '0.01', nearUsd: 2.5, gravePrice: '4000000000000000000000', mintingEnabled: true });
+    expect(await json(await fetch(base + '/config'))).toMatchObject({ currency: 'NEAR', gravePriceUsd: '1', offeringMinUsd: '0.1', nearUsd: 2.5, gravePrice: '400000000000000000000000', mintingEnabled: true });
     const created = await post('/payments', { plot: 7, chain: 'near', contract: 'dogshit.near', message: 'rip bozo' });
     expect(created.status).toBe(201);
     const pay = await json(created);
@@ -219,7 +219,7 @@ describe('game server', () => {
     // an offering
     const low = await post('/offerings', { graveId: grave.id, item: 'candle', amount: '0.0001' });
     expect((await json(low)).error.code).toBe('amount_too_low');
-    const off = await json(await post('/offerings', { graveId: grave.id, item: 'copium', amount: '0.01' }));
+    const off = await json(await post('/offerings', { graveId: grave.id, item: 'copium', amount: '0.05' }));
     expect(off).toMatchObject({ kind: 'offering', status: 'pending', item: 'copium' });
     const paid = await json(await post(`/payments/${off.id}/confirm`, { txHash: '8FtHUFBQsZ2MG77K3x3MJ9wjX3UT8zE1TczCrhZEcG8U', accountId: 'bob.near' }));
     expect(paid).toMatchObject({ status: 'fulfilled', grave: { offerings: 1 } });
