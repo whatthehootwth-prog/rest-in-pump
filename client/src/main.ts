@@ -16,6 +16,7 @@ import { Landing } from './ui/landing.ts';
 import { GraveField, type PlotFocus } from './world/graves.ts';
 import { PlotCard } from './ui/plotcard.ts';
 import { CreateGraveDialog } from './ui/creategrave.ts';
+import { Npcs } from './game/npcs.ts';
 import { OfferingDialog } from './ui/offering.ts';
 import { pendingPayment } from './ui/payflow.ts';
 import { GameAudio } from './audio/audio.ts';
@@ -101,6 +102,8 @@ async function main() {
   const plotCard = new PlotCard((plot) => void createGrave.open(plot), (g) => void offering.open(graves.grave(g.id) ?? g));
   let focus: PlotFocus | null = null;
   const remotes = new RemotePlayers(world.scene);
+  // a few nameless NPC owls (local to this screen): they wander, mourn at graves, club with you, hop and roll
+  const npcs = new Npcs(world.scene, world.colliders, graves);
   input.bindTouchButtons(document);
 
   // ---- sound (starts on Enter: browsers only allow audio after a click)
@@ -287,12 +290,13 @@ async function main() {
     selfTag.sprite.position.set(player.pos.x, player.height + 1.0, player.pos.z);
     selfTag.tick(now);
     remotes.update(dt, t);
+    npcs.update(dt, t, player.pos, entered);
     focus = entered ? graves.focusAt(player.pos) : null;
     graves.update(t, focus);
     plotCard.show(focus);
     if (entered) cam.update(dt, input, player.pos, player.height, world.groundHeight);
     else cam.cinematic(t, world.groundHeight);
-    pushers.length = 0; pushers.push(player.pos); remotes.positions(pushers);
+    pushers.length = 0; pushers.push(player.pos); remotes.positions(pushers); npcs.positions(pushers);
     world.setGrassPushers(pushers);
     world.update(t, cam.camera, player.pos);
     renderer.render(world.scene, cam.camera);
