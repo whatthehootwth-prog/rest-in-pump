@@ -21,7 +21,7 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 - [x] Server checks: speed/teleport limits, world bounds, rate limits, origin allow-list, heartbeats
 - [x] Minimal HUD: real online count, wallet, mute (no settings page, no top-left panel)
 - [x] Random silly names for every player, given by the server (unique, not changeable)
-- [x] 3-5 nameless NPC owls (local to each screen): wander, cry at graves, follow you and club, hop, roll
+- [x] Nameless NPC owls (local to each screen) keep the graveyard at ~10 owls (10 minus real players); they cry only at real graves, join your emotes, greet you with a speech bubble, tag along, club with you, hop and roll
 - [x] Automated tests (63): protocol, rooms, chat, graves, offerings, minting, NFT artwork + metadata, migration, NEAR verification, HTTP + WebSocket integration, compiled NFT contract
 - [x] Project logo (favicon, loading screen, HUD)
 - [x] Local git repo, author `wth <whatthehootwth@gmail.com>`

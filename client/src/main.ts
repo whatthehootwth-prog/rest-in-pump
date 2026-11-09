@@ -102,7 +102,7 @@ async function main() {
   const plotCard = new PlotCard((plot) => void createGrave.open(plot), (g) => void offering.open(graves.grave(g.id) ?? g));
   let focus: PlotFocus | null = null;
   const remotes = new RemotePlayers(world.scene);
-  // a few nameless NPC owls (local to this screen): they wander, mourn at graves, club with you, hop and roll
+  // nameless NPC owls (local to this screen) so the graveyard always holds about 10 owls; they react to you
   const npcs = new Npcs(world.scene, world.colliders, graves);
   input.bindTouchButtons(document);
 
@@ -171,6 +171,7 @@ async function main() {
         selfId = m.you;
         sessionState.setToken(m.session);
         remotes.reset(m.players, m.you);
+        npcs.setPlayers(m.players.filter((p) => p.connected).length);
         const self = m.players.find((p) => p.id === m.you);
         if (self) {
           myName = self.name;
@@ -219,7 +220,7 @@ async function main() {
         break;
       case 'plots_reserved': graves.setReserved(m.reserved); break;
       case 'snapshot': remotes.applySnapshot(m.ts, m.s); break;
-      case 'online': hud.setOnline(m.total); break;
+      case 'online': hud.setOnline(m.total); npcs.setPlayers(m.room); break;
       case 'rooms': break;
       case 'error':
         if (m.fatal) break;   // the connection handles fatal errors
@@ -290,7 +291,7 @@ async function main() {
     selfTag.sprite.position.set(player.pos.x, player.height + 1.0, player.pos.z);
     selfTag.tick(now);
     remotes.update(dt, t);
-    npcs.update(dt, t, player.pos, entered);
+    npcs.update(dt, t, { pos: player.pos, emote: player.emote, entered });
     focus = entered ? graves.focusAt(player.pos) : null;
     graves.update(t, focus);
     plotCard.show(focus);

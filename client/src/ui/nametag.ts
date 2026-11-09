@@ -9,6 +9,7 @@ const PX = 0.12 / 30;
 
 /**
  * A player's name floating above their owl, plus a speech bubble when they chat.
+ * With an empty name (NPCs) only the speech bubble is drawn, and nothing at all when there is none.
  * Drawn on a small canvas; the sprite is anchored at its bottom so the bubble grows upward.
  */
 export class NameTag {
@@ -70,7 +71,8 @@ export class NameTag {
     const chip = this.self ? 'you' : '';
     const chipW = chip ? g.measureText(chip).width + 12 * S : 0;
     const nameW = Math.ceil(g.measureText(label).width + chipW + (chip ? 6 * S : 0)) + 20 * S;
-    const nameH = 26 * S;
+    const showName = !!this.name || this.self;
+    const nameH = showName ? 26 * S : 0;
     let lines: string[] = [];
     let bubbleW = 0;
     const lineH = 17 * S, padX = 10 * S, padY = 7 * S, tail = 7 * S, gap = 4 * S;
@@ -80,8 +82,10 @@ export class NameTag {
       bubbleW = Math.ceil(Math.max(...lines.map((l) => g.measureText(l).width))) + padX * 2;
     }
     const bubbleH = lines.length ? lines.length * lineH + padY * 2 : 0;
-    const w = Math.max(nameW, bubbleW);
-    const h = nameH + (bubbleH ? bubbleH + tail + gap : 0);
+    if (!showName && !bubbleH) { this.sprite.visible = false; return; }
+    this.sprite.visible = true;
+    const w = Math.max(showName ? nameW : 0, bubbleW);
+    const h = nameH + (bubbleH ? bubbleH + tail + (showName ? gap : 0) : 0);
     const resized = this.canvas.width !== w || this.canvas.height !== h;
     this.canvas.width = w; this.canvas.height = h;
     if (resized && this.sprite) {
@@ -102,6 +106,7 @@ export class NameTag {
       lines.forEach((l, i) => g.fillText(l, w / 2, padY + i * lineH + S));
     }
     // ---- name pill
+    if (!showName) { this.texture.needsUpdate = true; this.sprite.scale.set((w / S) * PX, (h / S) * PX, 1); return; }
     const ny = h - nameH, nx = (w - nameW) / 2;
     g.font = FONT;
     g.fillStyle = 'rgba(14,13,18,0.8)';
