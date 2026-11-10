@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { PLOTS } from '../../../shared/graves.ts';
 import { createOwl, type Owl } from '../owl/owl.ts';
-import { addCoinBadge, ghostify } from './ghost.ts';
+import { GHOST_LEVELS, GhostFade, addCoinBadge, ghostify } from './ghost.ts';
 import { NameTag } from '../ui/nametag.ts';
 import { damp, lerpAngle } from '../util/math.ts';
 import { resolveCollisions, type Colliders } from '../world/collision.ts';
@@ -9,8 +9,9 @@ import type { GraveField } from '../world/graves.ts';
 
 /**
  * Nameless NPC owls, purely cosmetic and local to each player's screen. There are always enough of them that the
- * graveyard holds about TOTAL owls: NPCs = TOTAL - real players in your graveyard (they walk in and out as players
- * come and go).
+ * Ghost owls, purely cosmetic and local to each player's screen. There are MIN_GHOSTS to MAX_GHOSTS of them: more when
+ * few players are online, fewer when many are, and the number drifts up and down over time. Every 10 to 30 seconds one
+ * ghost fades in somewhere or rises up and vanishes.
  *
  * Each picks something to do, does it for a while, then picks again:
  *   wander     stroll to a random spot
@@ -24,8 +25,10 @@ import type { GraveField } from '../world/graves.ts';
  * Now and then they say something in a speech bubble.
  */
 
-// TEMPORARY: 30 for a test (normally 10)
-export const TOTAL = 30;
+export const MIN_GHOSTS = 3;
+export const MAX_GHOSTS = 15;
+/** Seconds a ghost takes to fade in or vanish. */
+const FADE_S = 1.8;
 const RADIUS = 0.3;
 const GRAVITY = 12.5;
 const HOP_VELOCITY = 4.4;
@@ -74,8 +77,12 @@ interface Npc {
   joins: boolean;
   /** Its place in a row formation (0, 1, 2... alternating sides). */
   rowIndex: number;
-  /** Whether it already decided on a coin badge (decided once graves are loaded). */
+  /** Whether it already has its coin logo (added once graves are loaded). */
   badged: boolean;
+  /** How see-through this ghost is (one of GHOST_LEVELS). */
+  alpha: number;
+  /** Fading in (dir 1) or vanishing (dir -1); null once fully there. */
+  fade: { ctl: GhostFade; k: number; dir: 1 | -1 } | null;
 }
 
 /** viewYaw: the camera's yaw (the direction the player is looking at the scene). */
@@ -83,9 +90,7 @@ export interface PlayerView { pos: THREE.Vector3; emote: number; entered: boolea
 
 const rr = (a: number, b: number) => a + Math.random() * (b - a);
 const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
-const GATE = new THREE.Vector3(0, 0, 15.5);
-/** Share of ghosts that wear a coin logo. */
-const BADGE_CHANCE = 0.6;
+
 
 export class Npcs {
   private readonly list: Npc[] = [];
@@ -93,36 +98,54 @@ export class Npcs {
   private readonly colliders: Colliders;
   private readonly graves: GraveField;
   private target: number;
+  private players = 1;
+  /** When the ghost count drifts to a new target, and when the next ghost appears or vanishes. */
+  private nextMood = 0;
+  private nextEvent = 0;
   private slots = 0;
   /** The player's emote last frame (to notice changes). */
   private lastEmote = 0;
 
-  constructor(scene: THREE.Scene, colliders: Colliders, graves: GraveField, count = TOTAL - 1) {
+  constructor(scene: THREE.Scene, colliders: Colliders, graves: GraveField) {
     this.scene = scene; this.colliders = colliders; this.graves = graves;
-    this.target = count;
-    for (let i = 0; i < count; i++) this.spawn(this.randomSpot());
+    this.target = this.pickTarget();
+    for (let i = 0; i < this.target; i++) this.spawn(this.randomSpot(), false);
   }
 
-  /** How many real players are in this graveyard (you included): NPCs fill up to TOTAL. */
-  setPlayers(n: number) { this.target = Math.max(0, TOTAL - Math.max(1, n)); }
+  /** Most ghosts there can be right now: 15 with one player, about 1.5 fewer per extra player, never under 3. */
+  private ceiling() { return Math.max(MIN_GHOSTS, Math.min(MAX_GHOSTS, Math.round(MAX_GHOSTS - (this.players - 1) * 1.5))); }
+  /** A target somewhere in the band under the ceiling, so it is sometimes more and sometimes less. */
+  private pickTarget() { const hi = this.ceiling(), lo = Math.max(MIN_GHOSTS, hi - 5); return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+
+  /** How many real players are in this graveyard (you included): more players, fewer ghosts. */
+  setPlayers(n: number) {
+    this.players = Math.max(1, n);
+    if (this.target > this.ceiling() || this.target < Math.max(MIN_GHOSTS, this.ceiling() - 5)) this.target = this.pickTarget();
+  }
 
   positions(out: THREE.Vector3[]) { for (const n of this.list) out.push(n.pos); }
 
-  private spawn(at: THREE.Vector3) {
+  private spawn(at: THREE.Vector3, fadeIn = true) {
     const owl = createOwl();
     owl.setWalk(Math.floor(Math.random() * 9));
-    ghostify(owl);
+    const alpha = pick(GHOST_LEVELS);
+    ghostify(owl, alpha);
+    const gl = this.graves.graves();
+    if (gl.length) addCoinBadge(owl, pick(gl), alpha);   // before any fade, so the logo fades in with it
+    let fade: Npc['fade'] = null;
+    if (fadeIn) { fade = { ctl: new GhostFade(owl), k: 0, dir: 1 }; fade.ctl.set(0); }
     const tag = new NameTag('');
     this.scene.add(owl.root, owl.blob, tag.sprite);
     this.list.push({
       owl, tag, pos: at.clone(), yaw: rr(-Math.PI, Math.PI), speed: 0, phase: rr(0, 10), y: 0, vy: 0, grounded: true, land: 0,
       emote: 0, kind: 'idle', target: null, faceYaw: null, until: rr(0.5, 3), walkUntil: 0, nextHop: 0, graveId: null,
       nextGreet: 0, nextTalk: rr(3, 15), slot: this.slots++ % 8, leaving: false,
-      tOff: rr(0, 30), joinEmote: 0, reactAt: 0, joins: false, rowIndex: 0, badged: false,
+      tOff: rr(0, 30), joinEmote: 0, reactAt: 0, joins: false, rowIndex: 0, badged: gl.length > 0, alpha, fade,
     });
   }
 
   private remove(n: Npc) {
+    n.fade?.ctl.dispose();
     this.scene.remove(n.owl.root, n.owl.blob);
     n.tag.dispose();
     this.list.splice(this.list.indexOf(n), 1);
@@ -199,13 +222,21 @@ export class Npcs {
   }
 
   update(dt: number, t: number, pl: PlayerView): void {
-    // keep the head count: send extra NPCs out of the gate, bring new ones in through it
-    const staying = this.list.filter((n) => !n.leaving);
-    if (staying.length > this.target) {
-      const far = staying.sort((a, b) => b.pos.distanceTo(pl.pos) - a.pos.distanceTo(pl.pos))[0];
-      far.leaving = true; far.kind = 'wander'; far.target = GATE.clone(); far.emote = 0; far.until = t + 60; far.walkUntil = t + 40;
-    } else if (staying.length < this.target) {
-      this.spawn(GATE.clone().add(new THREE.Vector3(rr(-1, 1), 0, 0)));
+    // the head count drifts now and then; every 10-30 s one ghost appears or vanishes to follow it
+    if (!this.nextEvent) { this.nextMood = t + rr(25, 50); this.nextEvent = t + rr(10, 30); }
+    if (t >= this.nextMood) { this.target = this.pickTarget(); this.nextMood = t + rr(25, 50); }
+    if (t >= this.nextEvent) {
+      this.nextEvent = t + rr(10, 30);
+      const here = this.list.filter((n) => !n.leaving);
+      const vanish = () => {
+        const calm = here.filter((n) => !n.fade);
+        const n = calm.length ? pick(calm) : null;
+        if (!n) return;
+        n.leaving = true; n.kind = 'idle'; n.target = null; n.emote = 0; n.fade = { ctl: new GhostFade(n.owl), k: 1, dir: -1 };
+      };
+      if (here.length < this.target) this.spawn(this.randomSpot());
+      else if (here.length > this.target) vanish();
+      else if (Math.random() < 0.4) vanish();   // a swap: this one goes now, a new one comes on a later beat
     }
 
     const emoteChanged = pl.emote !== this.lastEmote;
@@ -215,11 +246,17 @@ export class Npcs {
 
     const graveList = this.graves.graves();
     for (const n of [...this.list]) {
-      // some ghosts wear a dead coin's logo (decided once, as soon as there are graves to pick from)
-      if (!n.badged && graveList.length) { n.badged = true; if (Math.random() < BADGE_CHANCE) addCoinBadge(n.owl, pick(graveList)); }
+      // every ghost wears a dead coin's logo (added as soon as there are graves to pick from; not mid-fade)
+      if (!n.badged && graveList.length && !n.fade) { n.badged = true; addCoinBadge(n.owl, pick(graveList), n.alpha); }
       const dPlayer = n.pos.distanceTo(pl.pos);
+      if (n.fade) {
+        n.fade.k = Math.max(0, Math.min(1, n.fade.k + n.fade.dir * dt / FADE_S));
+        n.fade.ctl.set(n.fade.k * n.fade.k * (3 - 2 * n.fade.k));
+        if (n.fade.dir < 0 && n.fade.k <= 0) { this.remove(n); continue; }
+        if (n.fade.dir > 0 && n.fade.k >= 1) { n.fade.ctl.restore(); n.fade = null; }
+      }
       if (n.leaving) {
-        if (n.pos.distanceTo(GATE) < 0.8 || t > n.walkUntil) { this.remove(n); continue; }
+        n.target = null; n.emote = 0;   // vanishing: stands still while it rises away
       } else {
         // react to the player's emote: nearby NPCs come and do it with you
         if (emoteChanged) { n.reactAt = t + rr(0.4, 2.2); n.joins = Math.random() < 0.75; }
@@ -297,6 +334,12 @@ export class Npcs {
 
       n.owl.root.position.set(n.pos.x, n.y, n.pos.z);
       n.owl.root.rotation.y = n.yaw;
+      // appearing rises out of the ground, vanishing floats up and thins out
+      const k = n.fade ? n.fade.k : 1;
+      if (n.fade) n.owl.root.position.y += n.fade.dir < 0 ? (1 - k) * 0.9 : -(1 - k) * 0.35;
+      n.owl.root.scale.set(1, 0.75 + 0.25 * k, 1);
+      n.owl.blob.scale.setScalar(k);
+      n.tag.sprite.visible = k > 0.6;
       if (n.grounded) n.phase += n.speed * dt * 8;
       n.owl.animate(dt, t + n.tOff, { emote: n.emote, speed: n.speed, phase: n.phase, air: !n.grounded, vy: n.vy, land: n.land });
       n.tag.sprite.position.set(n.pos.x, n.y + 1.0, n.pos.z);
