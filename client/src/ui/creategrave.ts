@@ -16,12 +16,13 @@ const CHAIN_TEXT: Record<ChainId, { label: string; placeholder: string; hint: st
 };
 
 type Lookup =
-  | { s: 'idle' } | { s: 'loading' } | { s: 'error'; msg: string }
+  | { s: 'idle' } | { s: 'loading' } | { s: 'error'; msg: string; field?: boolean }
   | { s: 'exists'; meme: MemeInfo; grave: GraveInfo } | { s: 'ok'; meme: MemeInfo };
 
 /**
- * "Create a grave": meme contract → last words → send the grave price in NEAR → a level-1 grave on the plot.
- * Creating a grave does not mint an NFT; memorials come from offerings (the creator can make one too).
+ * "Dig a grave": find the coin → carve its last words → send the grave price in NEAR → a level-1 grave on the plot.
+ * The left side always shows the grave's Memorial NFT; the right side has the title, steps and a footer that stays
+ * at the bottom with Close and the step's main button. Creating a grave does not mint an NFT; memorials come from gifts.
  */
 export class CreateGraveDialog {
   private readonly dlg = document.getElementById('grave-dlg') as HTMLDialogElement;
@@ -36,6 +37,7 @@ export class CreateGraveDialog {
   private contract = '';
   private lookup: Lookup = { s: 'idle' };
   private message = '';
+  private wordsError = false;
   /** Left side: the grave's Memorial NFT, always on screen (kept between renders so it doesn't flicker). */
   private readonly side = {
     img: h('img', { alt: 'Memorial NFT preview', width: 1080, height: 1380 }) as HTMLImageElement,
@@ -53,8 +55,8 @@ export class CreateGraveDialog {
       render: () => this.render(), isOpen: () => this.dlg.open, close: () => this.dlg.close(), toast,
       doneToast: (p) => `$${p.meme.symbol} now has a grave at plot #${p.plot}.`,
     }, 'grave');
-    document.getElementById('grave-close')!.addEventListener('click', () => this.dlg.close());
     this.dlg.addEventListener('close', () => this.flow.stopTimer());
+    this.dlg.addEventListener('click', (e) => { if (e.target === this.dlg) this.dlg.close(); });
     wallet.onChange(() => { if (this.dlg.open) this.render(); });
   }
 
@@ -88,23 +90,37 @@ export class CreateGraveDialog {
 
   private reset(plot: number) {
     this.flow.reset();
-    this.plot = plot; this.step = 'meme'; this.lookup = { s: 'idle' }; this.message = ''; this.contract = '';
+    this.plot = plot; this.step = 'meme'; this.lookup = { s: 'idle' }; this.message = ''; this.contract = ''; this.wordsError = false;
   }
 
+  /** Step 1's main button. Empty or malformed address: say so on the field. Found: straight on to the last words. */
   private async find() {
+    if (!this.contract.trim()) {
+      this.lookup = { s: 'error', msg: 'Paste the token address first.', field: true };
+      this.render(); this.focus('#grave-contract'); return;
+    }
     const contract = memeAddress(this.chain, this.contract);
-    if (!contract) { this.lookup = { s: 'error', msg: CHAIN_TEXT[this.chain].bad }; this.render(); return; }
+    if (!contract) { this.lookup = { s: 'error', msg: CHAIN_TEXT[this.chain].bad, field: true }; this.render(); this.focus('#grave-contract'); return; }
     this.contract = contract;
     this.lookup = { s: 'loading' };
     this.render();
     try {
       const r = await api.meme(this.chain, contract);
       this.lookup = r.grave ? { s: 'exists', meme: r.meme, grave: r.grave } : { s: 'ok', meme: r.meme };
+      if (this.lookup.s === 'ok') { this.step = 'words'; this.render(); this.focus('#grave-msg'); return; }
     } catch (e) {
       this.lookup = { s: 'error', msg: (e as Error).message };
     }
     this.render();
   }
+
+  /** Step 2's main button. */
+  private toPay() {
+    if (!sanitizeMessage(this.message)) { this.wordsError = true; this.render(); this.focus('#grave-msg'); return; }
+    this.wordsError = false; this.step = 'pay'; this.render();
+  }
+
+  private focus(sel: string) { setTimeout(() => (this.body.querySelector(sel) as HTMLElement | null)?.focus(), 0); }
 
   private pay() {
     const message = sanitizeMessage(this.message);
@@ -119,13 +135,14 @@ export class CreateGraveDialog {
 
   private render() {
     const order = ['meme', 'words', 'pay'] as const;
+    const head = h('div', { class: 'gm-head' },
+      h('h2', { id: 'grave-title' }, 'Dig a grave', h('span', { class: 'gm-plot' }, `plot #${this.plot}`)),
+      h('button', { class: 'gift-x', type: 'button', 'aria-label': 'Close', onclick: () => this.dlg.close() }, '×'));
     const steps = h('ol', { class: 'steps', 'aria-label': 'Steps' },
       ...(['Pick the coin', 'Last words', 'Bury it'] as const).map((label, i) =>
         h('li', { class: order.indexOf(this.step) === i ? 'on' : order.indexOf(this.step) > i ? 'done' : '' }, h('span', { class: 'n', 'aria-hidden': 'true' }, String(i + 1)), h('span', { class: 't' }, label))));
-    const title = document.getElementById('grave-title');
-    if (title) title.textContent = `Dig a grave · plot #${this.plot}`;
-    const view = this.step === 'meme' ? this.renderMeme() : this.step === 'words' ? this.renderWords() : this.renderPay();
-    this.mainEl.replaceChildren(steps, view);
+    const [view, foot] = this.step === 'meme' ? this.renderMeme() : this.step === 'words' ? this.renderWords() : this.renderPay();
+    this.mainEl.replaceChildren(head, steps, h('div', { class: 'gm-body' }, view), h('div', { class: 'gm-foot' }, ...foot));
     if (this.body.firstChild?.nodeName !== 'DIV') this.body.replaceChildren(h('div', { class: 'grave-layout' }, this.sideEl, this.mainEl));
     this.updateSide();
   }
@@ -133,12 +150,12 @@ export class CreateGraveDialog {
   /** The NFT: a blank "???" coin until one is found, then that coin's logo; the real grave's art once it is buried. */
   private updateSide() {
     const F = this.flow.state, L = this.lookup;
-    const meme = L.s === 'ok' || L.s === 'exists' ? L.meme : null;
+    const meme = L.s === 'ok' ? L.meme : null;
     const src = F.s === 'done' && F.payment.grave ? `/nft/grave/${F.payment.grave.id}/media.svg`
-      : meme && L.s === 'ok' ? `/nft/preview.svg?chain=${encodeURIComponent(meme.chain)}&contract=${encodeURIComponent(meme.contract)}`
+      : meme ? `/nft/preview.svg?chain=${encodeURIComponent(meme.chain)}&contract=${encodeURIComponent(meme.contract)}`
       : '/nft/preview.svg';
     if (this.side.img.getAttribute('src') !== src) this.side.img.src = src;
-    this.side.name.textContent = meme && L.s === 'ok' ? `${meme.name} · $${meme.symbol}` : 'Your dead coin goes here';
+    this.side.name.textContent = meme ? `${meme.name} · $${meme.symbol}` : 'Your dead coin goes here';
     this.updateWords();
   }
 
@@ -148,99 +165,117 @@ export class CreateGraveDialog {
     this.side.words.classList.toggle('empty', !text);
   }
 
-  private renderMeme() {
+  private closeBtn() { return h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => this.dlg.close() }, 'Close'); }
+
+  private renderMeme(): [Node, Node[]] {
+    const L = this.lookup;
+    const bad = L.s === 'error' && L.field;
     const input = h('input', {
       id: 'grave-contract', value: this.contract, placeholder: CHAIN_TEXT[this.chain].placeholder, spellcheck: 'false', autocomplete: 'off',
-      'aria-label': CHAIN_TEXT[this.chain].label,
-      oninput: (e: Event) => { this.contract = (e.target as HTMLInputElement).value; },
+      'aria-label': CHAIN_TEXT[this.chain].label, 'aria-invalid': bad ? 'true' : 'false', class: bad ? 'invalid' : '',
+      oninput: (e: Event) => {
+        this.contract = (e.target as HTMLInputElement).value;
+        if (this.lookup.s === 'error') { this.lookup = { s: 'idle' }; (e.target as HTMLElement).classList.remove('invalid'); const m = this.body.querySelector('#grave-find-msg'); if (m) { m.className = 'field-msg'; m.textContent = CHAIN_TEXT[this.chain].hint; } }
+      },
       onkeydown: (e: Event) => { if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); void this.find(); } },
     });
     const chainSel = h('select', { 'aria-label': 'Chain', onchange: (e: Event) => { this.chain = (e.target as HTMLSelectElement).value as ChainId; this.lookup = { s: 'idle' }; this.render(); } },
-      ...CHAINS.map((c) => h('option', { value: c.id, disabled: !c.live, selected: c.id === this.chain }, c.live ? c.name : `${c.name} (coming soon)`)));
-    const L = this.lookup;
-    const result =
-      L.s === 'loading' ? h('p', { class: 'field-msg' }, `Looking it up on ${chainName(this.chain)}…`)
-      : L.s === 'error' ? h('p', { class: 'field-msg bad' }, L.msg)
-      : L.s === 'exists' ? h('div', {}, h('p', { class: 'field-msg bad' }, `$${L.meme.symbol} already has a grave at plot #${L.grave.plot}. Each coin gets one grave, so go leave a gift there.`))
-      : L.s === 'ok' ? h('div', { class: 'reveal' },
-          h('div', { class: 'reveal-txt' },
-            h('p', { class: 'reveal-kicker' }, 'Coin found!'),
-            h('b', {}, L.meme.name), h('span', { class: 'tick' }, `$${L.meme.symbol}`),
-            h('p', { class: 'mono small muted' }, `${chainName(L.meme.chain)} · ${L.meme.contract}`),
-            h('p', { class: 'reveal-note' }, 'That is its Memorial NFT at Level 1. Gifts give the grave EXP, and the NFT evolves as it levels up.'),
-            L.meme.icon ? null : h('p', { class: 'field-msg' }, 'No logo we can show, so it uses its first letter.')))
-      : h('p', { class: 'field-msg' }, CHAIN_TEXT[this.chain].hint);
-    return h('div', { class: 'dlg-step' },
+      ...CHAINS.map((c) => h('option', { value: c.id, disabled: !c.live, selected: c.id === this.chain }, c.live ? c.name : `${c.name} (soon)`)));
+    const msg =
+      L.s === 'loading' ? h('p', { id: 'grave-find-msg', class: 'field-msg busy-line' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), `Looking it up on ${chainName(this.chain)}…`)
+      : L.s === 'error' ? h('p', { id: 'grave-find-msg', class: 'field-msg bad', role: 'alert' }, L.msg)
+      : L.s === 'exists' ? h('p', { id: 'grave-find-msg', class: 'field-msg bad', role: 'alert' }, `$${L.meme.symbol} already has a grave at plot #${L.grave.plot}. Each coin gets one grave, so go leave a gift there.`)
+      : h('p', { id: 'grave-find-msg', class: 'field-msg' }, CHAIN_TEXT[this.chain].hint);
+    const view = h('div', { class: 'dlg-step' },
       h('label', { class: 'lbl', for: 'grave-contract' }, CHAIN_TEXT[this.chain].label),
-      h('div', { class: 'row' }, chainSel, input, h('button', { class: 'btn', type: 'button', disabled: L.s === 'loading', onclick: () => void this.find() }, 'Find')),
-      result,
-      h('div', { class: 'dlg-actions' },
-        h('button', { class: 'btn btn-go', type: 'button', disabled: L.s !== 'ok', onclick: () => { this.step = 'words'; this.render(); } }, 'Next')));
+      h('div', { class: 'row' }, chainSel, input),
+      msg);
+    const find = h('button', { class: 'btn btn-go', type: 'button', disabled: L.s === 'loading', onclick: () => void this.find() }, L.s === 'loading' ? 'Finding…' : 'Find meme token');
+    return [view, [this.closeBtn(), find]];
   }
 
-  private renderWords() {
+  private renderWords(): [Node, Node[]] {
+    const meme = this.lookup.s === 'ok' ? this.lookup.meme : null;
     const len = [...this.message].length;
     const ta = h('textarea', {
-      id: 'grave-msg', maxlength: MESSAGE_MAX, rows: 2, placeholder: 'Here lies my portfolio. It went to zero, as foretold.',
-      'aria-describedby': 'grave-count',
-      oninput: (e: Event) => { this.message = (e.target as HTMLTextAreaElement).value; const c = document.getElementById('grave-count'); if (c) c.textContent = `${[...this.message].length}/${MESSAGE_MAX}`; this.updateWords(); },
+      id: 'grave-msg', maxlength: MESSAGE_MAX, rows: 3, placeholder: 'Here lies my portfolio. It went to zero, as foretold.',
+      'aria-describedby': 'grave-count', 'aria-invalid': this.wordsError ? 'true' : 'false', class: this.wordsError ? 'invalid' : '',
+      oninput: (e: Event) => {
+        this.message = (e.target as HTMLTextAreaElement).value;
+        const c = document.getElementById('grave-count'); if (c) c.textContent = `${[...this.message].length}/${MESSAGE_MAX}`;
+        if (this.wordsError && sanitizeMessage(this.message)) { this.wordsError = false; (e.target as HTMLElement).classList.remove('invalid'); this.body.querySelector('#grave-words-msg')?.remove(); }
+        this.updateWords();
+      },
+      onkeydown: (e: Event) => { const k = e as KeyboardEvent; if (k.key === 'Enter' && !k.shiftKey) { e.preventDefault(); this.toPay(); } },
     });
     ta.value = this.message;
-    const valid = !!sanitizeMessage(this.message);
-    return h('div', { class: 'dlg-step' },
-      h('label', { class: 'lbl', for: 'grave-msg' }, 'Carve its last words'),
-      h('div', { class: 'slab' },
-        h('div', { class: 'slab-rip', 'aria-hidden': 'true' }, 'R.I.P.'),
-        this.lookup.s === 'ok' ? h('div', { class: 'slab-name', 'aria-hidden': 'true' }, `$${this.lookup.meme.symbol}`) : null,
-        ta,
-        h('p', { id: 'grave-count', class: 'slab-count' }, `${len}/${MESSAGE_MAX}`)),
-      h('p', { class: 'field-msg' },
-        `Every grave starts as a ${GRAVE_LEVELS[0].name}. Gifts give it EXP, and it levels up at ${GRAVE_LEVELS[1].min}, ${GRAVE_LEVELS[2].min} and ${GRAVE_LEVELS[3].min.toLocaleString('en-US')} EXP.`),
-      h('div', { class: 'dlg-actions' },
-        h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => { this.step = 'meme'; this.render(); } }, 'Back'),
-        h('button', { class: 'btn btn-go', type: 'button', onclick: () => { if (sanitizeMessage(this.message)) this.step = 'pay'; this.render(); } }, 'Next')),
-      !valid && len > 0 ? h('p', { class: 'field-msg bad' }, 'Leave a message of 1–100 characters.') : null);
+    const view = h('div', { class: 'dlg-step' },
+      meme ? tokenRow(meme, () => { this.step = 'meme'; this.render(); }) : null,
+      h('label', { class: 'lbl', for: 'grave-msg' }, 'Its last words'),
+      ta,
+      h('div', { class: 'words-meta' },
+        this.wordsError ? h('p', { id: 'grave-words-msg', class: 'field-msg bad', role: 'alert' }, 'Write its last words first (1 to 100 characters).') : h('p', { class: 'field-msg' }, 'Shown on the grave and its Memorial NFT.'),
+        h('span', { id: 'grave-count', class: 'count' }, `${len}/${MESSAGE_MAX}`)));
+    return [view, [
+      this.closeBtn(),
+      h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => { this.step = 'meme'; this.render(); } }, 'Back'),
+      h('button', { class: 'btn btn-go', type: 'button', onclick: () => this.toPay() }, 'Next')]];
   }
 
-  private renderPay() {
+  private renderPay(): [Node, Node[]] {
     const cfg = this.config, meme = this.lookup.s === 'ok' ? this.lookup.meme : null;
     const F = this.flow.state;
     if (F.s === 'done') {
       const g = F.payment.grave;
-      return h('div', { class: 'dlg-step done' },
+      return [h('div', { class: 'dlg-step done' },
         h('div', { class: 'celebrate' }, h('p', { class: 'cele-title' }, 'Buried!'),
           h('p', { class: 'cele-sub' }, g ? `$${g.meme.symbol} now rests at plot #${g.plot}.` : 'Your grave is ready.')),
-        h('p', { class: 'field-msg' }, 'Now invite the mourners. Anyone who leaves a gift here, you included, gets this grave\'s Memorial NFT with their first one.'),
-        h('div', { class: 'dlg-actions' }, h('button', { class: 'btn btn-go', type: 'button', onclick: () => this.dlg.close() }, 'R.I.P.')));
+        h('ol', { class: 'next-list' },
+          h('li', {}, h('b', {}, 'Everyone can see it now.'), ' Owls walking past can visit your grave.'),
+          h('li', {}, h('b', {}, 'Gifts give it EXP.'), ' It levels up and grows as people leave them.'),
+          h('li', {}, h('b', {}, 'First gift = Memorial NFT.'), ' That goes for you too.'))),
+      [h('button', { class: 'btn btn-go', type: 'button', onclick: () => this.dlg.close() }, 'R.I.P.')]];
     }
     if (!cfg) {
-      return h('div', { class: 'dlg-step' }, this.configError
+      return [h('div', { class: 'dlg-step' }, this.configError
         ? h('p', { class: 'status bad' }, `Could not load prices: ${this.configError}`)
-        : h('p', { class: 'status busy' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Loading prices…'));
+        : h('p', { class: 'status busy' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Loading prices…')), [this.closeBtn()]];
     }
     const amount = this.flow.payment?.amount ?? cfg.gravePrice;
     if (!amount || !cfg.nearUsd) {
-      return h('div', { class: 'dlg-step' }, h('p', { class: 'status bad' }, 'Could not get the NEAR price right now, so graves are paused for a moment. Try again in a minute.'));
+      return [h('div', { class: 'dlg-step' }, h('p', { class: 'status bad' }, 'Could not get the NEAR price right now, so graves are paused for a moment. Try again in a minute.')), [this.closeBtn()]];
     }
     const price = nearLabel(amount);
     const acct = this.wallet.account;
-    // a preview of the grave about to be made, with the price on a tag
-    const summary = h('div', { class: 'preview' },
-      h('div', { class: 'preview-txt' },
-        h('p', { class: 'preview-meta' }, `Plot #${this.plot} · goes to `, h('span', { class: 'mono' }, cfg.receiver)),
-        h('p', { class: 'preview-meta' }, `Wallet: ${acct ? shortAccount(acct) : 'not connected yet'}`),
-        h('div', { class: 'price-tag' }, h('b', {}, price), h('span', {}, `≈ ${usdLabel(amount, cfg.nearUsd)}`))));
-    return h('div', { class: 'dlg-step' }, summary,
-      this.flow.view({
-        price, decimals: cfg.decimals, actionLabel: `Bury it · ${price}`, connectLabel: 'Connect wallet & bury it',
-        onAction: () => this.pay(), onClose: () => this.dlg.close(),
-        back: () => { this.step = 'words'; this.render(); },
-      }));
+    // the grave about to be made, like a ticket: coin, plot, words, where it starts, what it costs
+    const ticket = h('div', { class: 'ticket' },
+      meme ? tokenRow(meme) : null,
+      h('dl', { class: 'ticket-rows' },
+        h('dt', {}, 'Plot'), h('dd', {}, `#${this.plot}`),
+        h('dt', {}, 'Last words'), h('dd', { class: 'ticket-words' }, `“${this.message}”`),
+        h('dt', {}, 'Starts as'), h('dd', {}, h('span', { class: 'lv-chip' }, 'LV 1'), ` ${GRAVE_LEVELS[0].name}`),
+        h('dt', {}, 'Wallet'), h('dd', {}, acct ? shortAccount(acct) : 'Not connected yet')),
+      h('div', { class: 'ticket-price' },
+        h('span', {}, 'Grave price'),
+        h('b', {}, price),
+        h('small', {}, `about ${usdLabel(amount, cfg.nearUsd)} · goes to ${cfg.receiver}`)));
+    const view = h('div', { class: 'dlg-step' }, ticket,
+      h('p', { class: 'field-msg' }, `Gifts give it EXP: it levels up at ${GRAVE_LEVELS[1].min}, ${GRAVE_LEVELS[2].min} and ${GRAVE_LEVELS[3].min.toLocaleString('en-US')} EXP.`));
+    const flow = this.flow.view({
+      price, decimals: cfg.decimals, actionLabel: `Bury it · ${price}`, connectLabel: 'Connect wallet & bury it',
+      onAction: () => this.pay(), onClose: () => this.dlg.close(),
+      back: () => { this.step = 'words'; this.render(); },
+    });
+    return [view, [this.closeBtn(), h('div', { class: 'gm-flow' }, flow)]];
   }
 }
 
-export function memeChip(m: MemeInfo) {
-  return h('div', { class: 'meme-chip' },
-    m.icon ? h('img', { src: m.icon, alt: '' }) : h('div', { class: 'meme-ph' }, (m.symbol || '?').slice(0, 1).toUpperCase()),
-    h('div', { class: 'meme-txt' }, h('b', {}, m.name), h('span', { class: 'tick' }, `$${m.symbol}`), h('div', { class: 'mono small muted' }, `${chainName(m.chain)} · ${m.contract}`)));
+/** The found coin: logo, name, ticker, chain (and a Change link on step 2). */
+function tokenRow(m: MemeInfo, change?: () => void): Node {
+  return h('div', { class: 'token-row' },
+    m.icon ? h('img', { src: m.icon, alt: '' }) : h('span', { class: 'meme-ph' }, (m.symbol || '?').slice(0, 1).toUpperCase()),
+    h('div', { class: 'token-txt' },
+      h('b', {}, m.name), h('span', { class: 'tick' }, `$${m.symbol}`),
+      h('p', { class: 'mono small muted' }, `${chainName(m.chain)} · ${m.contract}`)),
+    change ? h('button', { class: 'link-btn', type: 'button', onclick: change }, 'Change') : null);
 }

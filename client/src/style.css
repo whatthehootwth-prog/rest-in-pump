@@ -827,3 +827,101 @@ dialog.game-dlg::backdrop { background: rgba(5, 4, 8, 0.62); backdrop-filter: bl
   .gs-words { align-self: start; padding: 6px 8px; font-size: 12px; text-align: left; }
   .grave-main { padding: 14px; }
 }
+
+/* ---------------------------------------------------------------- Dig a grave v3: full-height NFT, title on the right, sticky footer */
+#grave-dlg.game-dlg { width: min(760px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; }
+#grave-dlg .grave-layout { grid-template-columns: 250px 1fr; min-height: 470px; }
+#grave-dlg .grave-side { justify-content: center; padding: 22px 16px; }
+#grave-dlg .grave-side .nft-frame { max-width: 190px; }
+.grave-main { display: flex; flex-direction: column; min-width: 0; padding: 0; }
+.gm-head { display: flex; align-items: center; gap: 10px; padding: 16px 18px 6px; }
+.gm-head h2 { flex: 1; margin: 0; font-size: 21px; font-weight: 900; }
+.gm-plot { margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: #2a2732; color: var(--muted); font-size: 12px; font-weight: 800; vertical-align: 3px; }
+.grave-main .steps { margin: 6px 18px 14px; }
+.gm-body { flex: 1; padding: 0 18px 14px; }
+.gm-foot {
+  position: sticky; bottom: 0; display: flex; justify-content: flex-end; align-items: flex-end; gap: 8px; padding: 12px 18px 16px;
+  background: linear-gradient(180deg, rgba(22, 21, 27, 0.92), #16151b 40%); border-top: 1px solid #2d2a36;
+}
+.gm-foot > .btn-quiet:first-child { margin-right: auto; }
+.gm-foot .btn-go { min-width: 150px; }
+.gm-flow { flex: 1; min-width: 0; }
+.gm-flow .dlg-actions { margin-top: 0; }
+.gm-flow .status { margin: 0 0 10px; }
+.gm-flow .field-msg { margin: 0 0 8px; }
+.gm-flow .dlg-actions .btn-go { flex: 1; max-width: 300px; }
+.gm-flow .dlg-actions .btn-quiet:first-child { margin-right: auto; }
+.game-dlg input.invalid, .game-dlg textarea.invalid { border-color: var(--bad) !important; box-shadow: 0 0 0 3px rgba(224, 106, 95, 0.25); animation: field-shake 0.35s ease; }
+@keyframes field-shake { 25% { transform: translateX(-5px); } 50% { transform: translateX(5px); } 75% { transform: translateX(-3px); } }
+.game-dlg .field-msg.bad { color: #f0b3ab; font-weight: 600; }
+.token-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 10px 12px; border-radius: 14px; background: linear-gradient(135deg, #2a2633, #1d1b23); border: 1px solid #3d3848; }
+.token-row img, .token-row .meme-ph { flex: none; width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 3px solid var(--focus); background: #3b3846; display: grid; place-items: center; font-weight: 900; }
+.token-txt { flex: 1; min-width: 0; }
+.token-txt b { font-size: 15px; font-weight: 900; }
+.token-txt .mono { margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-btn { flex: none; padding: 4px 8px; border: 0; background: none; color: var(--focus); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; text-decoration: underline; }
+#grave-dlg textarea {
+  width: 100%; padding: 10px 12px; resize: none; color: var(--text); font: inherit; font-size: 15px; line-height: 1.4;
+  background: #0f0e14; border: 1px solid #34313d; border-radius: 10px;
+}
+.words-meta { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-top: 6px; }
+.words-meta .field-msg { margin: 0; }
+.words-meta .count { flex: none; font-size: 12px; color: var(--muted); font-weight: 700; }
+.ticket { position: relative; padding: 14px; border-radius: 16px; background: linear-gradient(160deg, #24212c, #19181f); border: 1px solid #3d3848; animation: card-in 0.3s cubic-bezier(0.2, 1.3, 0.4, 1); }
+.ticket .token-row { margin-bottom: 10px; background: rgba(0, 0, 0, 0.25); }
+.ticket-rows { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; margin: 0 2px 12px; font-size: 13px; }
+.ticket-rows dt { color: var(--muted); font-weight: 700; }
+.ticket-rows dd { margin: 0; overflow-wrap: anywhere; }
+.ticket-words { font: italic 600 14px/1.35 Georgia, 'Times New Roman', serif; }
+.lv-chip { display: inline-block; padding: 0 7px; border-radius: 999px; background: #d9b48a; color: #17140c; font-size: 11px; font-weight: 900; }
+.ticket-price { display: grid; gap: 2px; padding: 12px 14px; border-radius: 12px; background: #3a3320; border: 2px dashed var(--focus); text-align: center; }
+.ticket-price span { font-size: 11px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: var(--focus); }
+.ticket-price b { font-size: 24px; font-weight: 900; color: #fff6d8; }
+.ticket-price small { font-size: 11px; color: #c9c5bd; overflow-wrap: anywhere; }
+.next-list { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; counter-reset: n; }
+.next-list li { position: relative; padding: 10px 12px 10px 44px; border-radius: 12px; background: #1b1a21; border: 1px solid #34313d; font-size: 13px; color: #c9c5bd; counter-increment: n; }
+.next-list li::before { content: counter(n); position: absolute; left: 12px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--focus); color: #17140c; font-weight: 900; font-size: 12px; }
+.next-list b { color: var(--text); }
+@media (max-width: 720px) {
+  #grave-dlg .grave-layout { grid-template-columns: 1fr; min-height: 0; }
+  #grave-dlg .grave-side { padding: 12px 14px; }
+  .gm-head { padding: 12px 14px 4px; }
+  .gm-head h2 { font-size: 18px; }
+  .grave-main .steps { margin: 6px 14px 12px; }
+  .gm-body { padding: 0 14px 12px; }
+  .gm-foot { padding: 10px 14px 14px; }
+  .gm-foot .btn-go { min-width: 0; flex: 1; }
+  .ticket-price b { font-size: 20px; }
+}
+
+/* ---------------------------------------------------------------- gifts: the chosen one is obvious */
+.gift:not([aria-checked="true"]) { opacity: 0.5; filter: saturate(0.6); }
+.gift:not([aria-checked="true"]):hover:not(:disabled) { opacity: 0.9; filter: none; }
+.gift[aria-checked="true"] { opacity: 1; z-index: 1; }
+.gift[aria-checked="true"]::before {
+  content: 'Selected'; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); padding: 1px 9px; border-radius: 999px;
+  background: var(--rar); color: #120f08; font-size: 10px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
+}
+.gifts.intro .gift[aria-checked="true"] { animation: pick-intro 1.1s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.gifts.intro .gift[aria-checked="true"] svg { animation: item-wiggle 0.6s 0.25s ease 2; }
+@keyframes pick-intro {
+  0% { transform: scale(0.85); box-shadow: 0 0 0 0 color-mix(in srgb, var(--rar) 80%, transparent); }
+  35% { transform: translateY(-6px) scale(1.12); box-shadow: 0 0 0 14px color-mix(in srgb, var(--rar) 0%, transparent), 0 0 30px var(--rar); }
+  60% { transform: translateY(-4px) scale(0.98); }
+  100% { transform: translateY(-4px) scale(1.03); }
+}
+@media (prefers-reduced-motion: reduce) { .gifts.intro .gift[aria-checked="true"], .gifts.intro .gift[aria-checked="true"] svg { animation: none; } }
+.token-txt .tick { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #3a3320; color: var(--focus); font-size: 12px; font-weight: 800; vertical-align: 2px; }
+.gm-foot > .btn-quiet:first-child + .btn-quiet { margin-left: 0; }
+.gm-flow .dlg-actions { justify-content: flex-end; }
+.gm-flow .dlg-actions .btn-quiet:first-child { margin-right: 0; }
+.gifts { row-gap: 22px; }
+.gifts.intro .gift[aria-checked="true"] { animation-delay: var(--intro-delay, 0ms); }
+.gifts.intro .gift[aria-checked="true"] svg { animation-delay: calc(0.25s + var(--intro-delay, 0ms)); }
+.gift[aria-checked="true"] {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(241, 199, 107, 0.45), 0 0 28px color-mix(in srgb, var(--rar) 55%, rgba(241, 199, 107, 0.4)), 0 12px 22px rgba(0, 0, 0, 0.45);
+}
+.gift[aria-checked="true"]::after { background: var(--focus); }
+.gift[aria-checked="true"]::before { background: var(--focus); }
+@media (max-width: 760px) { .gifts { row-gap: 18px; } }

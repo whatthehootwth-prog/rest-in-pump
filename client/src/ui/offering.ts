@@ -11,7 +11,8 @@ const MINT_POLL_MS = 3000;
 const MINT_POLL_FOR_MS = 3 * 60_000;
 /** How rare each gift looks (by price, cheapest first). */
 const RARITY = ['common', 'common', 'rare', 'rare', 'epic', 'legendary'] as const;
-const usdText = (usd: string) => (Number(usd) < 1 ? `$${Number(usd).toFixed(2)}` : `$${usd}`);
+const INTRO_MS = 1500;
+const usdText =(usd: string) => (Number(usd) < 1 ? `$${Number(usd).toFixed(2)}` : `$${usd}`);
 
 /**
  * "Leave a gift": pick a gift (each has a fixed USD price, paid in NEAR, and gives the grave EXP) → send it →
@@ -33,6 +34,9 @@ export class OfferingDialog {
   private expBefore = 0;
   private memorial: MemorialView | null = null;
   private mintPolling = false;
+  /** Play the "this one is picked" animation once, the first time the gifts show after opening. */
+  private introPending = false;
+  private introAt = -Infinity;
 
   constructor(wallet: Wallet, toast: (t: string) => void) {
     this.wallet = wallet;
@@ -51,6 +55,7 @@ export class OfferingDialog {
       this.item = 'candle'; this.memorial = null;
     }   // else: an unfinished gift for this grave, continue it
     this.grave = grave;
+    this.introPending = true;
     this.dlg.showModal();
     this.render();
     await Promise.all([this.loadConfig(), this.loadDetail()]);
@@ -158,13 +163,18 @@ export class OfferingDialog {
     }
     // while the wallet / NEAR is working, the choice is locked
     const editable = ['review', 'rejected', 'error', 'expired', 'insufficient'].includes(this.flow.state.s);
-    const gifts = h('div', { class: 'gifts', role: 'radiogroup', 'aria-label': 'Gift' },
+    // the first time the gifts show: a one-off animation on the picked gift. Redraws during it keep its place
+    // (negative delay), so loading the grave's details a moment later doesn't cut it short.
+    if (this.introPending && editable) { this.introPending = false; this.introAt = performance.now(); }
+    const since = performance.now() - this.introAt;
+    const intro = since < INTRO_MS;
+    const gifts = h('div', { class: intro ? 'gifts intro' : 'gifts', style: intro ? `--intro-delay:-${Math.round(since)}ms` : undefined, role: 'radiogroup', 'aria-label': 'Gift' },
       ...OFFERING_ITEMS.map((it, i) => {
         const price = cfg.gifts.find((x) => x.id === it.id)?.price ?? null;
         return h('button', {
           class: `gift ${RARITY[i]}`, type: 'button', role: 'radio', 'aria-checked': String(this.item === it.id), disabled: !editable,
           title: price ? nearLabel(price) : undefined,
-          onclick: () => { this.item = it.id; this.render(); },
+          onclick: () => { this.item = it.id; this.introAt = -Infinity; this.render(); },
         },
         h('span', { class: 'gift-exp' }, `+${it.exp} EXP`),
         itemArt(it.id),
