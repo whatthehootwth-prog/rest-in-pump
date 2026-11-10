@@ -204,16 +204,60 @@ export function createOwl(): Owl {
         legs[s].rotation.x = damp(legs[s].rotation.x, x, k, dt);
         legs[s].rotation.z = damp(legs[s].rotation.z, s * z, k, dt);
       };
-      if (em === 'dance') {                       // arms take turns going up, hips swing, little hops
-        const b = t * Math.PI * 2 * 1.8;
-        armTo(1, Math.sin(b * 0.5) * 0.5, 2.3 + Math.sin(b) * 0.5);
-        armTo(-1, Math.sin(b * 0.5 + 1) * 0.5, 1.0 + Math.sin(b + Math.PI) * 0.9);
-        for (const s of [-1, 1]) legTo(s, 0, 0.08 + Math.max(0, Math.sin(b + (s > 0 ? 0 : Math.PI))) * 0.4);
-        body.position.y = HIP + Math.abs(Math.sin(b)) * 0.07;
-        body.rotation.z = damp(body.rotation.z, Math.sin(b * 0.5) * 0.28, k, dt);
-        body.rotation.y = damp(body.rotation.y, Math.sin(b * 0.25) * 0.7, k, dt);
-        neck.rotation.z = damp(neck.rotation.z, Math.sin(b) * 0.25, k, dt);
-        emOpen = 0.55 + Math.sin(b) * 0.2;
+      if (em === 'dance') {                       // a silly routine: chicken dance, noodle wiggle, disco spin (repeat)
+        const b = t * Math.PI * 2 * 2.0;           // 120 bpm
+        const beat = Math.sin(b), cyc = t % 7.2, move = cyc < 2.4 ? 0 : cyc < 4.8 ? 1 : 2, m = (cyc % 2.4) / 2.4;
+        const fast = 30;
+        if (move === 0) {
+          // chicken dance: elbows flap like wings, head pecks forward, knees knock, little bounce
+          const flap = Math.abs(Math.sin(b * 1.5));
+          for (const s of [-1, 1]) {
+            arms[s].rotation.x = damp(arms[s].rotation.x, -0.9, fast, dt);
+            arms[s].rotation.z = damp(arms[s].rotation.z, s * (0.35 + flap * 1.3), fast, dt);
+            legTo(s, 0.15, -0.1 + Math.max(0, Math.sin(b + (s > 0 ? 0 : Math.PI))) * 0.45);
+          }
+          body.position.y = HIP + Math.abs(beat) * 0.05;
+          body.rotation.x = damp(body.rotation.x, 0.22, fast, dt);
+          body.rotation.z = damp(body.rotation.z, beat * 0.08, fast, dt);
+          neck.rotation.x = Math.sin(b * 2) * 0.35 + 0.1;                         // pecking
+          emOpen = 0.25 + Math.abs(Math.sin(b * 2)) * 0.6;
+        } else if (move === 1) {
+          // noodle wiggle: jelly body, floppy wave arms out of sync, bobble head, wobbly knees
+          for (const s of [-1, 1]) {
+            arms[s].rotation.x = damp(arms[s].rotation.x, Math.sin(b * 0.9 + s * 2) * 1.2, 18, dt);
+            arms[s].rotation.z = damp(arms[s].rotation.z, s * (1.4 + Math.sin(b * 1.3 + s) * 1.0), 18, dt);
+            legTo(s, Math.sin(b + s) * 0.35, 0.15 + Math.sin(b * 2 + s) * 0.2);
+          }
+          body.position.y = HIP + Math.sin(b * 2) * 0.03;
+          body.rotation.z = damp(body.rotation.z, Math.sin(b * 0.5) * 0.45, 14, dt);  // big side-to-side jelly
+          body.rotation.x = damp(body.rotation.x, Math.sin(b * 0.5 + 1) * 0.2, 14, dt);
+          body.rotation.y = damp(body.rotation.y, Math.sin(b * 0.25) * 0.5, 10, dt);
+          neck.rotation.z = damp(neck.rotation.z, Math.sin(b * 0.75) * 0.5, 14, dt);  // head bobbles round
+          neck.rotation.x = damp(neck.rotation.x, Math.cos(b * 0.75) * 0.3, 14, dt);
+          emOpen = 0.6 + Math.sin(b) * 0.3;
+          squint = 0.55;                                                        // eyes half closed, feeling it
+        } else {
+          // disco: point up, point down, then a goofy spin with a squat at the end
+          const spin = m > 0.55;
+          const up = Math.sin(b * 0.5) > 0;
+          if (!spin) {
+            armTo(1, up ? -0.2 : 0.4, up ? 2.9 : 0.5);                            // right arm points up / down-across
+            armTo(-1, 0.3, 0.35 + Math.abs(beat) * 0.2);                          // other hand on hip
+            body.rotation.z = damp(body.rotation.z, up ? -0.18 : 0.18, fast, dt);
+            body.rotation.y = damp(body.rotation.y, up ? 0.4 : -0.4, 12, dt);
+          } else {
+            const sp = (m - 0.55) / 0.45;                                          // 0 -> 1 during the spin
+            for (const s of [-1, 1]) armTo(s, -0.2, 1.6 + Math.sin(b * 2 + s) * 0.3);   // arms out like a helicopter
+            body.rotation.y = sp * Math.PI * 2;
+            body.rotation.z = damp(body.rotation.z, 0, 12, dt);
+          }
+          for (const s of [-1, 1]) legTo(s, 0, 0.12 + (s > 0 && up ? 0.25 : 0));
+          const squat = spin && m > 0.9 ? 0.06 : 0;
+          body.position.y = HIP + Math.abs(beat) * 0.06 - squat;
+          neck.rotation.x = damp(neck.rotation.x, spin ? -0.25 : 0, 12, dt);
+          neck.rotation.z = damp(neck.rotation.z, beat * 0.2, 14, dt);
+          emOpen = spin ? 1.0 : 0.5 + Math.abs(beat) * 0.3;
+        }
       } else if (em === 'club') {                 // rocking out: both hands up and pumping, jumping, swaying, head banging
         const b = t * Math.PI * 2 * 2.13;          // ~128 bpm
         const beat = Math.sin(b), half = Math.sin(b / 2), quarter = Math.sin(b / 4);
