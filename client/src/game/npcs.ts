@@ -76,7 +76,7 @@ interface Npc {
 }
 
 /** viewYaw: the camera's yaw (the direction the player is looking at the scene). */
-export interface PlayerView { pos: THREE.Vector3; emote: number; entered: boolean; viewYaw: number }
+export interface PlayerView { pos: THREE.Vector3; emote: number; entered: boolean; viewYaw: number; /** the way the player's owl is facing */ yaw: number }
 
 const rr = (a: number, b: number) => a + Math.random() * (b - a);
 const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
@@ -155,10 +155,14 @@ export class Npcs {
     const row = (ahead: number, spacing: number, offsets: number) => new THREE.Vector3(
       pl.pos.x + fx * ahead + rx * side * offsets * spacing, 0, pl.pos.z + fz * ahead + rz * side * offsets * spacing);
     if (n.joinEmote === EMOTE.cry) {
-      // centre slot first, then left / right: k=0 -> 0, 1 -> +1, 2 -> -1 ...
-      const off = k === 0 ? 0 : Math.ceil(k / 2);
-      const sd = k % 2 ? 1 : -1;
-      return { at: new THREE.Vector3(pl.pos.x + fx * 2.0 + rx * sd * off * 1.15, 0, pl.pos.z + fz * 2.0 + rz * sd * off * 1.15), face: faceCamera };
+      // mourners: a row with the player (left, right, then a second row just behind), all facing the way the
+      // player faces, e.g. towards the grave the player is crying at
+      const px = Math.sin(pl.yaw), pz = Math.cos(pl.yaw);            // player forward
+      const qx = Math.cos(pl.yaw), qz = -Math.sin(pl.yaw);           // player right
+      const back = k >= 4 ? 1.0 : 0;                                  // first 4 beside the player, then a row behind
+      const kk = k >= 4 ? k - 4 : k, sd = kk % 2 ? -1 : 1, off = Math.floor(kk / 2) + 1;
+      const lateral = back ? (kk % 2 ? -1 : 1) * (Math.floor(kk / 2) * 1.1 + 0.55) : sd * off * 1.0;
+      return { at: new THREE.Vector3(pl.pos.x + qx * lateral - px * back, 0, pl.pos.z + qz * lateral - pz * back), face: pl.yaw };
     }
     if (n.joinEmote === EMOTE.pray) return { at: row(0.1, 1.05, step), face: faceAway };
     if (n.joinEmote === EMOTE.roll) return { at: row(0.2, 1.5, step), face: faceCamera };
