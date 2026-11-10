@@ -795,3 +795,35 @@ dialog.game-dlg::backdrop { background: rgba(5, 4, 8, 0.62); backdrop-filter: bl
 .gift-table th, .gift-table td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--line); }
 .gift-table th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
 .gift-table td:last-child { color: var(--focus); font-weight: 800; }
+
+/* ---------------------------------------------------------------- Dig a grave: NFT always on the left */
+#grave-dlg.game-dlg { width: min(880px, calc(100vw - 24px)); }
+#grave-dlg .dlg-body { padding: 0; }
+#grave-dlg .dialog-head { border-bottom: 1px solid #2d2a36; }
+.grave-layout { display: grid; grid-template-columns: 290px 1fr; }
+.grave-side {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 20px 18px; overflow: hidden;
+  background: radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--lvl) 26%, transparent), transparent 70%), #121118; border-right: 1px solid #2d2a36;
+}
+.grave-side::before {
+  content: ''; position: absolute; left: 50%; top: 150px; width: 480px; height: 480px; margin: -240px 0 0 -240px; border-radius: 50%;
+  background: repeating-conic-gradient(color-mix(in srgb, var(--lvl) 13%, transparent) 0 10deg, transparent 10deg 24deg); animation: rays 40s linear infinite; pointer-events: none;
+}
+.grave-side .nft-frame { max-width: 220px; }
+.gs-name { position: relative; margin: 8px 0 0; font-weight: 900; font-size: 15px; text-align: center; overflow-wrap: anywhere; }
+.gs-words { position: relative; width: 100%; margin: 0; padding: 10px 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.32); font: italic 600 13px/1.4 Georgia, 'Times New Roman', serif; text-align: center; color: #e2ded6; overflow-wrap: anywhere; }
+.gs-words:not(.empty)::before { content: '“'; } .gs-words:not(.empty)::after { content: '”'; }
+.gs-words.empty { color: #7d7987; font-style: italic; }
+.grave-main { min-width: 0; padding: 18px 20px 20px; }
+.grave-main .reveal { margin-top: 12px; }
+@media (max-width: 720px) {
+  .grave-layout { grid-template-columns: 1fr; }
+  .grave-side { display: grid; grid-template-columns: 92px 1fr; grid-template-rows: auto 1fr; align-items: center; gap: 6px 14px; padding: 12px 14px; border-right: 0; border-bottom: 1px solid #2d2a36; }
+  .grave-side::before { top: 60px; left: 60px; width: 280px; height: 280px; margin: -140px 0 0 -140px; }
+  .grave-side .nft-frame { grid-row: 1 / 3; padding: 4px; border-radius: 14px; animation: none; }
+  .grave-side .nft-frame img { border-radius: 10px; }
+  .grave-side .nft-frame figcaption { display: none; }
+  .gs-name { margin: 0; text-align: left; font-size: 14px; align-self: end; }
+  .gs-words { align-self: start; padding: 6px 8px; font-size: 12px; text-align: left; }
+  .grave-main { padding: 14px; }
+}

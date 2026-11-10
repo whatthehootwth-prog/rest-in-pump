@@ -32,11 +32,17 @@ export function createNftRoutes(graves: GraveService, log: Logger, publicBaseUrl
     try {
       // what a new grave's Memorial NFT will look like (level 1), for the "Dig a grave" dialog
       if (url.pathname === '/nft/preview.svg') {
+        const blank = (meme: GraveInfo['meme']): GraveInfo => ({ id: 0, plot: 0, meme, message: '', creator: '', createdAt: 0, offerings: 0, exp: 0, level: 1, recentItems: [], itemCounts: {} });
+        // no coin yet: a blank "???" memorial, so the dialog always has an NFT to show
+        if (!url.searchParams.has('contract')) {
+          res.writeHead(200, headers('image/svg+xml; charset=utf-8', 3600));
+          res.end(req.method === 'HEAD' ? undefined : memorialSvg(blank({ chain: 'near', contract: '', name: 'Your coin', symbol: '???', decimals: null, icon: null })));
+          return true;
+        }
         void graves.lookup(url.searchParams.get('chain'), url.searchParams.get('contract')).then((r) => {
           if ('code' in r) { notFound(res); return; }
-          const g: GraveInfo = { id: 0, plot: 0, meme: r.meme, message: '', creator: '', createdAt: 0, offerings: 0, exp: 0, level: 1, recentItems: [], itemCounts: {} };
           res.writeHead(200, headers('image/svg+xml; charset=utf-8', 600));
-          res.end(req.method === 'HEAD' ? undefined : memorialSvg(g));
+          res.end(req.method === 'HEAD' ? undefined : memorialSvg(blank(r.meme)));
         }).catch((err) => {
           log.warn('nft preview failed', { err: String(err) });
           if (!res.headersSent) { res.writeHead(500); res.end(); }
