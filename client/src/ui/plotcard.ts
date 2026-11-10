@@ -44,7 +44,7 @@ export class PlotCard {
       const icon = g.meme.icon
         ? h('img', { class: 'pc-icon', src: g.meme.icon, alt: '' })
         : h('span', { class: 'pc-icon pc-icon-ph', 'aria-hidden': 'true' }, (g.meme.symbol || '?').slice(0, 1).toUpperCase());
-      this.el.replaceChildren(action('Leave an offering', () => this.onOffer(g), [
+      this.el.replaceChildren(action('Leave a gift', () => this.onOffer(g), [
         icon,
         h('span', { class: 'pc-what' }, h('b', {}, `$${g.meme.symbol}`), h('span', { class: 'pc-lvl' }, ` · Level ${g.level} ${levelName(g.level).replace(' Grave', '')}`)),
       ]));

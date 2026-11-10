@@ -93,7 +93,7 @@ export function createApi(graves: GraveService, log: Logger, clientIp: (req: htt
       if (req.method === 'POST' && url.pathname === '/api/offerings') {
         const body = await readJson(req);
         if (!body) { send(res, 400, { error: { code: 'bad_request', message: 'Expected a JSON body.' } }); return true; }
-        const out = await graves.createOffering({ graveId: body.graveId, item: body.item, amount: body.amount }, ip, Date.now());
+        const out = await graves.createOffering({ graveId: body.graveId, item: body.item }, ip, Date.now());
         if (isErr(out)) fail(res, out); else send(res, 201, out);
         return true;
       }

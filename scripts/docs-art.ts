@@ -10,11 +10,11 @@ import { memorialSvg } from '../server/src/nft.ts';
 const out = 'client/public/docs';
 mkdirSync(out, { recursive: true });
 
-const sample = (offerings: number): GraveInfo => ({
-  id: 1, plot: 7, message: '', creator: 'example.near', createdAt: 0, offerings, level: levelFor(offerings), recentItems: [], itemCounts: {},
+const sample = (exp: number): GraveInfo => ({
+  id: 1, plot: 7, message: '', creator: 'example.near', createdAt: 0, offerings: exp, exp, level: levelFor(exp), recentItems: [], itemCounts: {},
   meme: { chain: 'near', contract: 'rip.example.near', name: 'Rest In Pump', symbol: 'RIP', decimals: 18, icon: 'data:image/png;base64,' + readFileSync('client/public/logo-180.png').toString('base64') },
 });
-[[1, 3], [2, 42], [3, 420], [4, 4200]].forEach(([lvl, n]) => writeFileSync(`${out}/level-${lvl}.svg`, memorialSvg(sample(n))));
+[[1, 6], [2, 64], [3, 640], [4, 6400]].forEach(([lvl, n]) => writeFileSync(`${out}/level-${lvl}.svg`, memorialSvg(sample(n))));
 
 // how $WTH flows: players pay in WTH -> graves & offerings -> treasury -> buyback
 const box = (x: number, w: number, title: string, sub: string, fill: string) => `

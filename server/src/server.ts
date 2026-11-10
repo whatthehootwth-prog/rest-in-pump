@@ -90,7 +90,7 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
   };
   const graves = new GraveService({
     db, log: log.child({ mod: 'graves' }), receiver: cfg.treasury,
-    gravePriceUsd: cfg.gravePriceUsd, offeringMinUsd: cfg.offeringMinUsd,
+    gravePriceUsd: cfg.gravePriceUsd,
     price: priceSource,
     holdMinutes: cfg.holdMinutes, nftContract: cfg.nftContract, mintingEnabled: mintingConfigured || !!opts.memorialChain,
     lookupMeme: (chain, contract) => chain === 'solana'

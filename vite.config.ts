@@ -21,6 +21,7 @@ export default defineConfig({
       '/ws': { target: `ws://127.0.0.1:${serverPort}`, ws: true },
       '/healthz': { target: `http://127.0.0.1:${serverPort}` },
       '/api': { target: `http://127.0.0.1:${serverPort}` },
+      '/nft': { target: `http://127.0.0.1:${serverPort}` },
     },
   },
   test: {

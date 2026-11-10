@@ -30,6 +30,19 @@ export function createNftRoutes(graves: GraveService, log: Logger, publicBaseUrl
     if (!url.pathname.startsWith('/nft/')) return false;
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { allow: 'GET, HEAD' }); res.end(); return true; }
     try {
+      // what a new grave's Memorial NFT will look like (level 1), for the "Dig a grave" dialog
+      if (url.pathname === '/nft/preview.svg') {
+        void graves.lookup(url.searchParams.get('chain'), url.searchParams.get('contract')).then((r) => {
+          if ('code' in r) { notFound(res); return; }
+          const g: GraveInfo = { id: 0, plot: 0, meme: r.meme, message: '', creator: '', createdAt: 0, offerings: 0, exp: 0, level: 1, recentItems: [], itemCounts: {} };
+          res.writeHead(200, headers('image/svg+xml; charset=utf-8', 600));
+          res.end(req.method === 'HEAD' ? undefined : memorialSvg(g));
+        }).catch((err) => {
+          log.warn('nft preview failed', { err: String(err) });
+          if (!res.headersSent) { res.writeHead(500); res.end(); }
+        });
+        return true;
+      }
       const media = /^\/nft\/grave\/(\d{1,9})\/media\.svg$/.exec(url.pathname);
       if (media) {
         const grave = graves.grave(Number(media[1]));
@@ -56,7 +69,8 @@ export function createNftRoutes(graves: GraveService, log: Logger, publicBaseUrl
             { trait_type: 'Memecoin contract address', value: g.meme.contract },
             { trait_type: 'Blockchain', value: chainName(g.meme.chain) },
             { trait_type: 'Grave ID', value: g.id },
-            { trait_type: 'Memorial level', value: `Level ${g.level} — ${levelName(g.level)}` },
+            { trait_type: 'Memorial level', value: `Level ${g.level}: ${levelName(g.level)}` },
+            { trait_type: 'Community EXP', value: g.exp },
             { trait_type: 'Total community offerings', value: g.offerings },
             { trait_type: 'Original participant wallet', value: m.account_id },
             { trait_type: 'Personal offerings made', value: personalOfferings },
@@ -121,9 +135,9 @@ export function memorialSvg(g: GraveInfo): string {
   const s = SPOTS[g.level], art = design(g.level), accent = ACCENT[g.level];
   const ticker = esc(describe(g.meme.symbol, g.meme.contract, g.plot).namePrefix);
   const levelText = esc(`LEVEL ${g.level} · ${levelName(g.level).toUpperCase()}`);
-  const count = `${g.offerings.toLocaleString('en-US')} ${g.offerings === 1 ? 'OFFERING' : 'OFFERINGS'}`;
-  const next = nextLevelIn(g.offerings);
-  const nextText = next === null ? 'MAX LEVEL' : `${next.toLocaleString('en-US')} TO NEXT LEVEL`;
+  const count = `${g.exp.toLocaleString('en-US')} EXP`;
+  const next = nextLevelIn(g.exp);
+  const nextText = next === null ? 'MAX LEVEL' : `${next.toLocaleString('en-US')} EXP TO NEXT LEVEL`;
   const icon = g.meme.icon && /^data:image\/(png|jpeg|gif|webp|svg\+xml)[;,]/i.test(g.meme.icon) ? esc(g.meme.icon) : null;
   const font = `font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900"`;
   const box = s.kind === 'circle' ? { x: s.cx - s.r, y: s.cy - s.r, w: s.r * 2, h: s.r * 2 } : s;

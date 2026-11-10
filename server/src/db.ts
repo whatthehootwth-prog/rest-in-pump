@@ -149,6 +149,17 @@ const MIGRATIONS: Migration[] = [
     PRIMARY KEY (round_id, account)
   );
   ` },
+
+  // 4: gifts give EXP (each offering keeps the EXP it gave; a grave's level comes from its EXP total).
+  //    Older offerings get the EXP of their item (same values as OFFERING_ITEMS in shared/graves.ts).
+  { sql: `
+  ALTER TABLE offerings ADD COLUMN exp INTEGER NOT NULL DEFAULT 0;
+  UPDATE offerings SET exp = CASE item
+    WHEN 'candle' THEN 1 WHEN 'flowers' THEN 2 WHEN 'noodles' THEN 5
+    WHEN 'copium' THEN 12 WHEN 'rug' THEN 40 WHEN 'diamond' THEN 150 ELSE 1 END;
+  ALTER TABLE graves ADD COLUMN exp INTEGER NOT NULL DEFAULT 0;
+  UPDATE graves SET exp = (SELECT COALESCE(SUM(exp), 0) FROM offerings WHERE offerings.grave_id = graves.id);
+  ` },
 ];
 
 export function openDb(file: string): Db {

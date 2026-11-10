@@ -2,44 +2,49 @@
  * Graves, offerings and Memorial NFTs: plot layout, memorial levels, offering items and the shapes
  * exchanged by the API. Shared by client and server so both agree on ids, positions and limits.
  *
- * "Every offering keeps the memory alive." A grave represents a memecoin. Visitors leave paid offerings
- * in NEAR; each successful offering adds one to the grave's community count, and the grave evolves at
- * milestones. A wallet's first successful offering to a grave earns it that grave's Memorial NFT, and all
+ * "Every offering keeps the memory alive." A grave represents a memecoin. Visitors leave gifts, each with
+ * its own USD price (paid in NEAR) and EXP; the grave's community EXP decides its level, and the grave evolves
+ * at milestones. A wallet's first successful offering to a grave earns it that grave's Memorial NFT, and all
  * memorials of a grave evolve with it. No staking, yield, rewards or token burning.
  */
 
-/** Memorial levels, reached by the community offering count (number of successful offerings, not WTH). */
+/** Memorial levels, reached by the grave's community EXP (the sum of the EXP of every gift left there). */
 export const GRAVE_LEVELS = [
   { level: 1, name: 'Forgotten Grave', min: 0 },
-  { level: 2, name: 'Remembered Grave', min: 10 },
-  { level: 3, name: 'Honored Grave', min: 100 },
-  { level: 4, name: 'Legendary Grave', min: 1000 },
+  { level: 2, name: 'Remembered Grave', min: 25 },
+  { level: 3, name: 'Honored Grave', min: 250 },
+  { level: 4, name: 'Legendary Grave', min: 2500 },
 ] as const;
 export type GraveLevel = 1 | 2 | 3 | 4;
-export function levelFor(offerings: number): GraveLevel {
+export function levelFor(exp: number): GraveLevel {
   let lvl: GraveLevel = 1;
-  for (const l of GRAVE_LEVELS) if (offerings >= l.min) lvl = l.level;
+  for (const l of GRAVE_LEVELS) if (exp >= l.min) lvl = l.level;
   return lvl;
 }
 export const levelName = (l: GraveLevel) => GRAVE_LEVELS[l - 1].name;
-/** Offerings still needed for the next level (null at the top). */
-export function nextLevelIn(offerings: number): number | null {
-  const next = GRAVE_LEVELS.find((l) => l.min > offerings);
-  return next ? next.min - offerings : null;
+/** EXP still needed for the next level (null at the top). */
+export function nextLevelIn(exp: number): number | null {
+  const next = GRAVE_LEVELS.find((l) => l.min > exp);
+  return next ? next.min - exp : null;
 }
 
-/** Things visitors can leave at a grave. Purely decorative: the WTH amount is chosen separately. */
+/**
+ * Gifts visitors can leave at a grave, cheapest first. Each has a fixed USD price (paid in NEAR at the live price)
+ * and gives the grave EXP; bigger gifts give a little more EXP per dollar.
+ * The EXP values are also in db.ts migration 4 (to back-fill older offerings): change both together.
+ */
 export const OFFERING_ITEMS = [
-  { id: 'candle', name: 'Candle' },
-  { id: 'flowers', name: 'Flowers' },
-  { id: 'noodles', name: 'Instant noodles' },
-  { id: 'rug', name: 'A rug' },
-  { id: 'diamond', name: 'Diamond hands' },
-  { id: 'copium', name: 'Copium tank' },
+  { id: 'candle', name: 'Candle', usd: '0.1', exp: 1 },
+  { id: 'flowers', name: 'Flowers', usd: '0.2', exp: 2 },
+  { id: 'noodles', name: 'Instant noodles', usd: '0.5', exp: 5 },
+  { id: 'copium', name: 'Copium tank', usd: '1', exp: 12 },
+  { id: 'rug', name: 'A rug', usd: '3', exp: 40 },
+  { id: 'diamond', name: 'Diamond hands', usd: '10', exp: 150 },
 ] as const;
 export type OfferingItem = (typeof OFFERING_ITEMS)[number]['id'];
 export const isOfferingItem = (v: unknown): v is OfferingItem => OFFERING_ITEMS.some((i) => i.id === v);
 export const itemName = (id: string) => OFFERING_ITEMS.find((i) => i.id === id)?.name ?? id;
+export const itemExp = (id: string) => OFFERING_ITEMS.find((i) => i.id === id)?.exp ?? 0;
 
 export const MESSAGE_MAX = 100;
 /** How many recent offering items are shown around a grave. */
@@ -113,6 +118,8 @@ export interface GraveInfo {
   createdAt: number;
   /** Community offering count (successful offerings). */
   offerings: number;
+  /** Community EXP (sum of the EXP of every gift left here). Decides the level. */
+  exp: number;
   level: GraveLevel;
   /** Most recent offering items, newest first (for decoration). */
   recentItems: string[];
@@ -128,12 +135,12 @@ export interface PriceConfig {
   receiver: string;
   /** USD prices (exact decimal strings). */
   gravePriceUsd: string;
-  offeringMinUsd: string;
   /** Current USD per NEAR, or null if no price source answered (orders pause). */
   nearUsd: number | null;
   /** The USD prices in yoctoNEAR at the current price (null when the price is unknown). */
   gravePrice: string | null;
-  offeringMin: string | null;
+  /** Every gift with its price in yoctoNEAR at the current price (null when the price is unknown). */
+  gifts: { id: OfferingItem; usd: string; exp: number; price: string | null }[];
   holdMinutes: number;
   /** Whether Memorial NFT minting is switched on (contract + minter configured on the server). */
   mintingEnabled: boolean;

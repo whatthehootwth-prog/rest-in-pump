@@ -203,7 +203,7 @@ describe('game server', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const json = async (r: Response): Promise<any> => r.json();
     const post = (path: string, body: unknown) => fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    expect(await json(await fetch(base + '/config'))).toMatchObject({ currency: 'NEAR', gravePriceUsd: '1', offeringMinUsd: '0.1', nearUsd: 2.5, gravePrice: '400000000000000000000000', mintingEnabled: true });
+    expect(await json(await fetch(base + '/config'))).toMatchObject({ currency: 'NEAR', gravePriceUsd: '1', nearUsd: 2.5, gravePrice: '400000000000000000000000', mintingEnabled: true });
     const created = await post('/payments', { plot: 7, chain: 'near', contract: 'dogshit.near', message: 'rip bozo' });
     expect(created.status).toBe(201);
     const pay = await json(created);
@@ -211,19 +211,20 @@ describe('game server', () => {
     const confirmed = await post(`/payments/${pay.id}/confirm`, { txHash: '9FtHUFBQsZ2MG77K3x3MJ9wjX3UT8zE1TczCrhZEcG8U', accountId: 'alice.near' });
     expect((await json(confirmed)).status).toBe('fulfilled');
     const { grave } = await watcher.next('grave_added');
-    expect(grave).toMatchObject({ plot: 7, level: 1, offerings: 0, creator: 'alice.near', message: 'rip bozo' });
+    expect(grave).toMatchObject({ plot: 7, level: 1, offerings: 0, exp: 0, creator: 'alice.near', message: 'rip bozo' });
     const dup = await post('/payments', { plot: 8, chain: 'near', contract: 'dogshit.near', message: 'again' });
     expect(dup.status).toBe(409);
     expect((await json(dup)).error.code).toBe('grave_exists');
 
     // an offering
-    const low = await post('/offerings', { graveId: grave.id, item: 'candle', amount: '0.0001' });
-    expect((await json(low)).error.code).toBe('amount_too_low');
-    const off = await json(await post('/offerings', { graveId: grave.id, item: 'copium', amount: '0.05' }));
+    const bad = await post('/offerings', { graveId: grave.id, item: 'lambo' });
+    expect((await json(bad)).error.code).toBe('bad_item');
+    const off = await json(await post('/offerings', { graveId: grave.id, item: 'copium', amount: '0.000001' }));
     expect(off).toMatchObject({ kind: 'offering', status: 'pending', item: 'copium' });
+    expect(BigInt(off.amount) / 10n ** 18n).toBe(400000n);   // copium is $1 = 0.4 NEAR at $2.50, whatever the browser sends
     const paid = await json(await post(`/payments/${off.id}/confirm`, { txHash: '8FtHUFBQsZ2MG77K3x3MJ9wjX3UT8zE1TczCrhZEcG8U', accountId: 'bob.near' }));
-    expect(paid).toMatchObject({ status: 'fulfilled', grave: { offerings: 1 } });
-    expect(await watcher.next('grave_updated')).toMatchObject({ grave: { id: grave.id, offerings: 1 }, offering: { item: 'copium', payer: 'bob.near', levelUp: false } });
+    expect(paid).toMatchObject({ status: 'fulfilled', grave: { offerings: 1, exp: 12 } });
+    expect(await watcher.next('grave_updated')).toMatchObject({ grave: { id: grave.id, offerings: 1, exp: 12 }, offering: { item: 'copium', payer: 'bob.near', levelUp: false } });
 
     // the memorial mints in the background; its metadata and artwork are served for wallets
     let detail;
@@ -241,13 +242,19 @@ describe('game server', () => {
     const attr = Object.fromEntries(body.attributes.map((a: { trait_type: string; value: unknown }) => [a.trait_type, a.value]));
     expect(attr).toMatchObject({
       'Memecoin name': 'Dog Shit', 'Memecoin contract address': 'dogshit.near', Blockchain: 'NEAR', 'Grave ID': grave.id,
-      'Memorial level': 'Level 1 — Forgotten Grave', 'Total community offerings': 1, 'Original participant wallet': 'bob.near', 'Personal offerings made': 1,
+      'Memorial level': 'Level 1: Forgotten Grave', 'Community EXP': 12, 'Total community offerings': 1, 'Original participant wallet': 'bob.near', 'Personal offerings made': 1,
     });
     expect(attr['First offering date']).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(attr['Grave creation date']).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     const art = await fetch(`http://127.0.0.1:${port}/nft/grave/${grave.id}/media.svg`);
     expect(art.headers.get('content-type')).toContain('image/svg+xml');
-    expect(await art.text()).toContain('1 OFFERING');
+    expect(await art.text()).toContain('12 EXP');
+    // what a new grave's NFT will look like, for the Dig a grave dialog
+    const prev = await fetch(`http://127.0.0.1:${port}/nft/preview.svg?chain=near&contract=rug.near`);
+    expect(prev.status).toBe(200);
+    expect(prev.headers.get('content-type')).toContain('image/svg+xml');
+    expect(await prev.text()).toContain('LEVEL 1');
+    expect((await fetch(`http://127.0.0.1:${port}/nft/preview.svg?chain=near&contract=NOT%20VALID`)).status).toBe(404);
     expect((await fetch(`http://127.0.0.1:${port}/nft/token/99-1.json`)).status).toBe(404);
     expect((await fetch(`${base}/graves/${grave.id}?account=NOT%20OK`)).status).toBe(400);
   });

@@ -25,9 +25,8 @@ export interface Config {
   solanaRpcUrls: string[];
   /** Account that receives the NEAR for graves and offerings. */
   treasury: string;
-  /** USD price to create a grave, and the minimum offering in USD (paid in NEAR at the live price). */
+  /** USD price to create a grave (paid in NEAR at the live price). Gift prices are fixed in shared/graves.ts. */
   gravePriceUsd: string;
-  offeringMinUsd: string;
   /** How long a plot + meme stay reserved (and an offering stays open) while the player pays. */
   holdMinutes: number;
   /** Memorial NFTs. Minting runs only when all three are set; otherwise memorials queue until it is. */
@@ -63,8 +62,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   // the built client (npm run build). Set STATIC_DIR="" to disable, e.g. when a CDN serves the files.
   const staticDir = env.STATIC_DIR === undefined ? 'dist/client' : env.STATIC_DIR || null;
   for (const old of ['GRAVE_PRICES_WTH', 'GRAVE_PRICE_WTH', 'OFFERING_MIN_WTH', 'WTH_CONTRACT', 'WTH_DECIMALS']) {
-    if (env[old]) throw new Error(`${old} is no longer used: graves and offerings are paid in NEAR (set GRAVE_PRICE_USD / OFFERING_MIN_USD)`);
+    if (env[old]) throw new Error(`${old} is no longer used: graves and offerings are paid in NEAR (set GRAVE_PRICE_USD)`);
   }
+  if (env.OFFERING_MIN_USD) throw new Error('OFFERING_MIN_USD is no longer used: every gift has its own fixed USD price (OFFERING_ITEMS in shared/graves.ts)');
   const usd = (key: string, def: string) => {
     const v = (env[key] ?? def).trim();
     if (!/^\d{1,9}(\.\d{1,6})?$/.test(v) || Number(v) <= 0) throw new Error(`${key} must be a positive USD amount like 0.01`);
@@ -97,7 +97,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     solanaRpcUrls: (env.SOLANA_RPC_URLS ?? 'https://api.mainnet-beta.solana.com').split(',').map((s) => s.trim()).filter(Boolean),
     treasury: env.TREASURY_ACCOUNT ?? 'whatthehoot.near',
     gravePriceUsd: usd('GRAVE_PRICE_USD', '1'),
-    offeringMinUsd: usd('OFFERING_MIN_USD', '0.1'),
     holdMinutes: int(env, 'HOLD_MINUTES', 15, 1, 120),
     nftContract, minterAccountId, minterPrivateKey, publicBaseUrl,
     buyback: buybackConfig(env),

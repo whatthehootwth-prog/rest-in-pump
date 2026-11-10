@@ -21,7 +21,7 @@ import { Npcs } from './game/npcs.ts';
 import { OfferingDialog } from './ui/offering.ts';
 import { pendingPayment } from './ui/payflow.ts';
 import { GameAudio } from './audio/audio.ts';
-import { itemName, levelName } from '../../shared/graves.ts';
+import { itemExp, itemName, levelName } from '../../shared/graves.ts';
 import { Wallet } from './wallet/wallet.ts';
 import { api, ApiError } from './net/api.ts';
 import { shortAccount } from './ui/dom.ts';
@@ -216,7 +216,7 @@ async function main() {
         if (m.offering.levelUp) audio.levelUp(); else audio.offering();
         graves.addGrave(m.grave);
         offering.graveUpdated(m.grave);
-        chat.system(`${shortAccount(m.offering.payer)} left ${itemName(m.offering.item).toLowerCase()} at $${m.grave.meme.symbol}.`);
+        chat.system(`${shortAccount(m.offering.payer)} left ${itemName(m.offering.item).toLowerCase()} at $${m.grave.meme.symbol} (+${itemExp(m.offering.item)} EXP).`);
         if (m.offering.levelUp) chat.system(`$${m.grave.meme.symbol} is now a Level ${m.grave.level} ${levelName(m.grave.level)}.`);
         break;
       case 'plots_reserved': graves.setReserved(m.reserved); break;
@@ -272,7 +272,7 @@ async function main() {
     }
     if (p.status === 'fulfilled') {
       pendingPayment.clear();
-      hud.toast(p.kind === 'grave' ? `Your $${p.meme.symbol} grave at plot #${p.plot} is ready.` : `Your offering at $${p.meme.symbol} was received.`);
+      hud.toast(p.kind === 'grave' ? `Your $${p.meme.symbol} grave at plot #${p.plot} is ready.` : `Your gift at $${p.meme.symbol} was received.`);
       return;
     }
     if (p.status === 'failed' || p.status === 'expired') { pendingPayment.clear(); return; }

@@ -9,7 +9,7 @@ A multiplayer cartoon graveyard. Players walk around as the owl mascot and see e
 | 3D world + owl character | Done (ported from the prototype, unchanged look) |
 | Multiplayer (rooms, sync, reconnect) | **Done — phase 1** (see "What is verified") |
 | Graves: create a grave for a meme on an empty plot, paid in NEAR ($1 at the live price), verified on chain | **Built** — server tested; a real-wallet payment has not been made through the game yet |
-| Offerings, memorial levels (graves evolve with the community offering count) | **Built** — same payment flow, server + browser tested |
+| Offerings, memorial levels (graves evolve with community EXP from gifts) | **Built** — same payment flow, server + browser tested |
 | Memorial NFTs (NEP-171 contract + server minter + live metadata/artwork) | **Built, not deployed** — contract tested as compiled wasm; deploy to `memorial.whatthehoot.near` is yours (below) |
 | Grave search, memes on other chains (Solana / Base / Ethereum) | Not started |
 
@@ -39,7 +39,7 @@ npm run check        # typecheck client + server, then run the tests
 npm run contract:build   # build the Memorial NFT contract (needs Rust + the wasm32 target); its tests then run in npm test
 ```
 
-A local copy starts with an empty graveyard. To see graves, add four clearly labelled demo graves, one per level (plots 37, 36, 29, 28 by the path near the gate; not real memes, nobody paid for them, offering counts set for display), and remove them when you are done. Never run it against the production database.
+A local copy starts with an empty graveyard. To see graves, add four clearly labelled demo graves, one per level (plots 37, 36, 29, 28 by the path near the gate; not real memes, nobody paid for them, EXP set for display), and remove them when you are done. Never run it against the production database.
 
 ```bash
 node scripts/demo-grave.ts            # add
@@ -56,7 +56,7 @@ server/src/            game server (Node + ws)
   rooms.ts             room / player bookkeeping, pure logic (unit-tested)
   server.ts            HTTP (static files, /healthz, /api) + WebSocket handling, rate limits, heartbeats
   db.ts                SQLite (Node's built-in driver) + migrations
-  graves.ts            graves + offerings: holds, payment confirmation, idempotency, expiry, offering count, memorial queue
+  graves.ts            graves + offerings: holds, payment confirmation, idempotency, expiry, gift EXP + levels, memorial queue
   minter.ts            mints queued Memorial NFTs on NEAR (idempotent, retries with backoff)
   nft.ts               live NFT metadata (/nft/token/:id.json) and level-based artwork (/nft/grave/:id/media.svg)
   near.ts              NEAR RPC: token metadata, ft_transfer verification
@@ -123,11 +123,22 @@ TODO.md                roadmap checklist
 - Creating a grave does **not** mint an NFT. The creator gets a memorial by making an offering like anyone else.
 
 **Offerings**
-- At a grave, **E** opens "Leave an offering": a funny item (candle, flowers, instant noodles, a rug, diamond hands,
-  copium tank) plus any NEAR amount worth at least `OFFERING_MIN_USD` (default $0.10; it must stay above the ~0.01 NEAR each new Memorial NFT costs in storage).
-- The grave's **community offering count** is the number of successful offerings — not NEAR spent. Each verified
-  payment adds exactly one (one payment row → at most one offering row, enforced by a unique key). Failed,
-  underpaid, reused or repeated confirmations never count.
+- At a grave, **E** opens "Leave a gift". Every gift has a fixed USD price (paid in NEAR at the live price) and gives
+  the grave EXP (`OFFERING_ITEMS` in `shared/graves.ts`):
+
+  | Gift | Price | EXP |
+  |---|---|---|
+  | Candle | $0.10 | 1 |
+  | Flowers | $0.20 | 2 |
+  | Instant noodles | $0.50 | 5 |
+  | Copium tank | $1 | 12 |
+  | A rug | $3 | 40 |
+  | Diamond hands | $10 | 150 |
+
+  The cheapest gift must stay above the ~0.01 NEAR each new Memorial NFT costs in storage.
+- A grave's **level comes from its community EXP**: Level 2 at 25 EXP, Level 3 at 250, Level 4 at 2,500. The server
+  prices each gift itself, and each verified payment adds exactly one offering with that gift's EXP (one payment row →
+  at most one offering row, enforced by a unique key). Failed, underpaid, reused or repeated confirmations never count.
 - Levels: 1 Forgotten Grave (0–9), 2 Remembered (10–99), 3 Honored (100–999), 4 Legendary (1,000+). The tombstone in
   the world changes design with the level (wooden cross → headstone → marble tomb → mausoleum) and the latest
   offerings are laid in front of it. Changes are pushed live to everyone (`grave_updated`).
@@ -154,7 +165,7 @@ TODO.md                roadmap checklist
   *and* enforced by the contract). Title: `$RUG — Memorial #001` (numbered per grave).
 - The contract (`contracts/memorial`) stores `media = grave/<id>/media.svg` and `reference = token/<id>.json`,
   relative to its `base_uri` (`<PUBLIC_BASE_URL>/nft`). The game serves those live, so every memorial of a grave
-  evolves together: the artwork shows the grave's current level, ticker and offering count, and the JSON carries
+  evolves together: the artwork shows the grave's current level, ticker and EXP, and the JSON carries
   the attributes (memecoin name and contract, blockchain, grave ID, memorial level, total community offerings,
   original participant wallet, personal offerings made, first offering date, grave creation date).
 - Memorials are normal transferable NFTs. No staking, yield, rewards or token burning.

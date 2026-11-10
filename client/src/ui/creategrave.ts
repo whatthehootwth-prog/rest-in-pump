@@ -132,7 +132,14 @@ export class CreateGraveDialog {
       L.s === 'loading' ? h('p', { class: 'field-msg' }, `Looking it up on ${chainName(this.chain)}…`)
       : L.s === 'error' ? h('p', { class: 'field-msg bad' }, L.msg)
       : L.s === 'exists' ? h('div', {}, memeChip(L.meme), h('p', { class: 'field-msg bad' }, `$${L.meme.symbol} already has a grave at plot #${L.grave.plot}. Each coin gets one grave, so go leave a gift there.`))
-      : L.s === 'ok' ? h('div', {}, memeChip(L.meme), L.meme.icon ? null : h('p', { class: 'field-msg' }, 'This token has no logo we can show; its grave will use its first letter.'))
+      : L.s === 'ok' ? h('div', { class: 'reveal' },
+          nftPreview(L.meme),
+          h('div', { class: 'reveal-txt' },
+            h('p', { class: 'reveal-kicker' }, 'Coin found!'),
+            h('b', {}, L.meme.name), h('span', { class: 'tick' }, `$${L.meme.symbol}`),
+            h('p', { class: 'mono small muted' }, `${chainName(L.meme.chain)} · ${L.meme.contract}`),
+            h('p', { class: 'reveal-note' }, 'This is its Memorial NFT at Level 1. Gifts give the grave EXP, and the NFT evolves as it levels up.'),
+            L.meme.icon ? null : h('p', { class: 'field-msg' }, 'No logo we can show, so it uses its first letter.')))
       : h('p', { class: 'field-msg' }, CHAIN_TEXT[this.chain].hint);
     return h('div', { class: 'dlg-step' },
       h('label', { class: 'lbl', for: 'grave-contract' }, CHAIN_TEXT[this.chain].label),
@@ -159,7 +166,7 @@ export class CreateGraveDialog {
         ta,
         h('p', { id: 'grave-count', class: 'slab-count' }, `${len}/${MESSAGE_MAX}`)),
       h('p', { class: 'field-msg' },
-        `Every grave starts as a ${GRAVE_LEVELS[0].name}. Each offering visitors leave adds one to its count, and it grows at ${GRAVE_LEVELS[1].min}, ${GRAVE_LEVELS[2].min} and ${GRAVE_LEVELS[3].min.toLocaleString('en-US')} offerings.`),
+        `Every grave starts as a ${GRAVE_LEVELS[0].name}. Gifts give it EXP, and it levels up at ${GRAVE_LEVELS[1].min}, ${GRAVE_LEVELS[2].min} and ${GRAVE_LEVELS[3].min.toLocaleString('en-US')} EXP.`),
       h('div', { class: 'dlg-actions' },
         h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => { this.step = 'meme'; this.render(); } }, 'Back'),
         h('button', { class: 'btn btn-go', type: 'button', onclick: () => { if (sanitizeMessage(this.message)) this.step = 'pay'; this.render(); } }, 'Next')),
@@ -172,7 +179,7 @@ export class CreateGraveDialog {
     if (F.s === 'done') {
       const g = F.payment.grave;
       return h('div', { class: 'dlg-step done' },
-        h('div', { class: 'celebrate' }, h('div', { class: 'cele-art' }, tombArt(meme)), h('p', { class: 'cele-title' }, 'Buried!'),
+        h('div', { class: 'celebrate' }, h('div', { class: 'cele-art nft-pop' }, g ? nftImg(`/nft/grave/${g.id}/media.svg`, g.meme.symbol) : meme ? nftPreview(meme) : null), h('p', { class: 'cele-title' }, 'Buried!'),
           h('p', { class: 'cele-sub' }, g ? `$${g.meme.symbol} now rests at plot #${g.plot}.` : 'Your grave is ready.')),
         h('p', { class: 'field-msg' }, 'Now invite the mourners. Anyone who leaves a gift here, you included, gets this grave\'s Memorial NFT with their first one.'),
         h('div', { class: 'dlg-actions' }, h('button', { class: 'btn btn-go', type: 'button', onclick: () => this.dlg.close() }, 'R.I.P.')));
@@ -190,7 +197,7 @@ export class CreateGraveDialog {
     const acct = this.wallet.account;
     // a preview of the grave about to be made, with the price on a tag
     const summary = h('div', { class: 'preview' },
-      tombArt(meme),
+      meme ? nftPreview(meme) : null,
       h('div', { class: 'preview-txt' },
         h('b', {}, meme ? `${meme.name} $${meme.symbol}` : 'Your coin'),
         h('p', { class: 'preview-words' }, `“${this.message}”`),
@@ -206,11 +213,12 @@ export class CreateGraveDialog {
   }
 }
 
-/** A little tombstone with the coin's logo (or first letter) on it, for the "Buried!" screen. */
-function tombArt(m: MemeInfo | null) {
-  return h('div', { class: 'tomb' },
-    m?.icon ? h('img', { src: m.icon, alt: '' }) : h('div', { class: 'meme-ph' }, (m?.symbol || '?').slice(0, 1).toUpperCase()),
-    h('span', {}, 'R.I.P.'));
+/** What this coin's Memorial NFT will look like at Level 1 (drawn by the server from the coin's own logo). */
+function nftPreview(m: MemeInfo) {
+  return nftImg(`/nft/preview.svg?chain=${encodeURIComponent(m.chain)}&contract=${encodeURIComponent(m.contract)}`, m.symbol);
+}
+function nftImg(src: string, symbol: string) {
+  return h('figure', { class: 'nft-mini' }, h('img', { src, alt: `$${symbol} Memorial NFT`, width: 1080, height: 1380 }), h('figcaption', {}, 'LV 1'));
 }
 
 export function memeChip(m: MemeInfo) {

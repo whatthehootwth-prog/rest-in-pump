@@ -1,6 +1,6 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import {
-  NEAR_ACCOUNT_RE, RECENT_ITEMS, memeAddress, chainLive, isChain, isOfferingItem, isPlotId, levelFor, parseUnits, plotById, sanitizeMessage,
+  NEAR_ACCOUNT_RE, OFFERING_ITEMS, RECENT_ITEMS, itemExp, memeAddress, chainLive, isChain, isOfferingItem, isPlotId, levelFor, parseUnits, plotById, sanitizeMessage,
   type ChainId, type GraveDetail, type GraveInfo, type GravesSnapshot, type MemeInfo, type MemorialStatus, type MemorialView,
   type PaymentStatus, type PaymentView, type PriceConfig,
 } from '../../shared/graves.ts';
@@ -15,7 +15,7 @@ import { usdToYocto, type NearPrice } from './price.ts';
  * Grave:    createGrave HOLDS an empty plot + the meme for a few minutes and returns the exact transfer to make;
  *           confirmPayment verifies the transfer and creates the grave in one transaction.
  * Offering: createOffering returns the transfer for an offering (item + amount >= the minimum) to an existing grave.
- *           Once verified, the grave's community offering count goes up by exactly one, and if it is this wallet's
+ *           Once verified, the grave gets exactly one offering and the gift's EXP, and if it is this wallet's
  *           first offering to the grave, a Memorial NFT is queued for it (see minter.ts). Retries, duplicate
  *           confirmations and failed transactions never count: one payment row = at most one offering row.
  * A background sweep expires unpaid holds and re-checks payments whose verification was interrupted.
@@ -26,9 +26,8 @@ export interface GraveServiceDeps {
   log: Logger;
   /** Account that receives the NEAR. */
   receiver: string;
-  /** Price to create a grave and minimum offering, in USD (exact decimal strings like "0.01"). */
+  /** Price to create a grave in USD (exact decimal string like "1"). Gift prices are in OFFERING_ITEMS. */
   gravePriceUsd: string;
-  offeringMinUsd: string;
   /** Live NEAR/USD price. */
   price: NearPrice;
   holdMinutes: number;
@@ -54,7 +53,7 @@ interface PaymentRow {
 }
 interface GraveRow {
   id: number; plot: number; chain: string; contract: string; name: string; symbol: string; decimals: number | null;
-  icon: string | null; message: string; creator: string; payment_id: string; created_at: number; offering_count: number;
+  icon: string | null; message: string; creator: string; payment_id: string; created_at: number; offering_count: number; exp: number;
 }
 export interface MemorialRow {
   grave_id: number; account_id: string; status: MemorialStatus; token_id: string | null; serial: number | null;
@@ -68,8 +67,13 @@ const RECENT_OFFERINGS = 10;
 /** After a hold expires, how long we keep re-checking a submitted transaction before giving up. */
 const VERIFY_GIVE_UP_MS = 30 * 60 * 1000;
 
+const META_TTL_MS = 10 * 60_000;
+const META_CACHE_MAX = 500;
+
 export class GraveService {
   private readonly d: GraveServiceDeps;
+  /** Recently read coin metadata (name, ticker, logo), so lookups and NFT previews don't hit the chains every time. */
+  private readonly metaCache = new Map<string, { at: number; meta: FtMetadata }>();
   private readonly verifying = new Set<string>();
 
   constructor(deps: GraveServiceDeps) { this.d = deps; }
@@ -78,9 +82,9 @@ export class GraveService {
     const nearUsd = await this.d.price.usd();
     return {
       currency: 'NEAR', decimals: 24, receiver: this.d.receiver,
-      gravePriceUsd: this.d.gravePriceUsd, offeringMinUsd: this.d.offeringMinUsd, nearUsd,
+      gravePriceUsd: this.d.gravePriceUsd, nearUsd,
       gravePrice: nearUsd ? usdToYocto(this.d.gravePriceUsd, nearUsd).toString() : null,
-      offeringMin: nearUsd ? usdToYocto(this.d.offeringMinUsd, nearUsd).toString() : null,
+      gifts: OFFERING_ITEMS.map((it) => ({ id: it.id, usd: it.usd, exp: it.exp, price: nearUsd ? usdToYocto(it.usd, nearUsd).toString() : null })),
       holdMinutes: this.d.holdMinutes, mintingEnabled: this.d.mintingEnabled, nftContract: this.d.nftContract,
     };
   }
@@ -156,12 +160,25 @@ export class GraveService {
     return (this.d.db.prepare("SELECT COUNT(*) AS n FROM memorials WHERE grave_id = ? AND status = 'minted'").get(graveId) as { n: number }).n;
   }
 
+  /** Coin metadata from its chain, cached for a few minutes (only successful reads are cached). */
+  private async meta(chain: ChainId, contract: string): Promise<MetadataResult> {
+    const key = `${chain}:${contract}`, hit = this.metaCache.get(key), now = Date.now();
+    if (hit && now - hit.at < META_TTL_MS) return { ok: true, meta: hit.meta };
+    const res = await this.d.lookupMeme(chain, contract);
+    if (res.ok) {
+      this.metaCache.delete(key);
+      this.metaCache.set(key, { at: now, meta: res.meta });
+      if (this.metaCache.size > META_CACHE_MAX) this.metaCache.delete(this.metaCache.keys().next().value!);
+    }
+    return res;
+  }
+
   /** Resolves a meme by contract. Also says whether it already has a grave. */
   async lookup(chainRaw: unknown, contractRaw: unknown): Promise<{ meme: MemeInfo; grave: GraveInfo | null } | GraveError> {
     const parsed = parseMemeRef(chainRaw, contractRaw);
     if ('code' in parsed) return parsed;
     const { chain, contract } = parsed;
-    const res = await this.d.lookupMeme(chain, contract);
+    const res = await this.meta(chain, contract);
     if (!res.ok) return err(res.code === 'unavailable' ? 503 : 404, res.code, res.message);
     return { meme: memeInfo(chain, contract, res.meta), grave: this.graveByContract(chain, contract) };
   }
@@ -196,7 +213,7 @@ export class GraveService {
     if (holds >= MAX_HOLDS_PER_IP) return err(429, 'too_many_holds', 'Finish or cancel your other grave first.');
 
     // never trust metadata from the browser: resolve it here
-    const res = await this.d.lookupMeme(chain, contract);
+    const res = await this.meta(chain, contract);
     if (!res.ok) return err(res.code === 'unavailable' ? 503 : 404, res.code, res.message);
     const meme = memeInfo(chain, contract, res.meta);
 
@@ -217,34 +234,22 @@ export class GraveService {
     return this.view(this.row(id)!);
   }
 
-  async createOffering(input: { graveId: unknown; item: unknown; amount: unknown }, ip: string, now: number): Promise<PaymentView | GraveError> {
+  /** A gift at a grave. The price comes from the gift (its USD price at the live NEAR price), never from the browser. */
+  async createOffering(input: { graveId: unknown; item: unknown }, ip: string, now: number): Promise<PaymentView | GraveError> {
     this.expireHolds(now);
     const graveId = Number(input.graveId);
     const grave = Number.isInteger(graveId) && graveId > 0 ? this.grave(graveId) : null;
     if (!grave) return err(404, 'not_found', 'That grave does not exist.');
     if (!isOfferingItem(input.item)) return err(400, 'bad_item', 'Pick something to leave at the grave.');
-    const STEP = 10n ** 18n;   // amounts are whole 0.000001 NEAR (plus the unique tail)
-    let base: bigint;
-    try {
-      if (typeof input.amount !== 'string' || !/^\d{1,9}(\.\d{1,6})?$/.test(input.amount.trim())) throw new Error('bad');
-      base = (parseUnits(input.amount.trim(), 24) / STEP) * STEP;
-    } catch {
-      return err(400, 'bad_amount', 'Enter a NEAR amount, like 0.01 (up to 6 decimals).');
-    }
-    const nearUsd = await this.d.price.usd();
-    if (!nearUsd) return err(503, 'price_unavailable', 'Could not get the NEAR price right now. Try again in a minute.');
-    const min = usdToYocto(this.d.offeringMinUsd, nearUsd);
-    // 3% grace: the price may move a little between showing the minimum and pressing the button
-    if (base * 100n < min * 97n) return err(400, 'amount_too_low', `The minimum offering is ${trimNear(min)} NEAR (about $${this.d.offeringMinUsd}).`);
     const db = this.d.db;
     const item = input.item;
-
-    // same offering still waiting for payment from this visitor (closed the dialog, came back): resume it
-    const open1 = db.prepare("SELECT * FROM payments WHERE kind = 'offering' AND grave_id = ? AND item = ? AND client_ip = ? AND status = 'pending' AND tx_hash IS NULL")
-      .all(graveId, item, ip) as unknown as PaymentRow[];
-    const same = open1.find((r) => BigInt(r.amount) / STEP === base / STEP);
+    // same gift still waiting for payment from this visitor (closed the dialog, came back): resume it
+    const same = db.prepare("SELECT * FROM payments WHERE kind = 'offering' AND grave_id = ? AND item = ? AND client_ip = ? AND status = 'pending' AND tx_hash IS NULL ORDER BY created_at DESC")
+      .get(graveId, item, ip) as PaymentRow | undefined;
     if (same) return this.view(same);
-    const amount = this.uniqueAmount(base);
+    const nearUsd = await this.d.price.usd();
+    if (!nearUsd) return err(503, 'price_unavailable', 'Could not get the NEAR price right now. Try again in a minute.');
+    const amount = this.uniqueAmount(usdToYocto(OFFERING_ITEMS.find((i) => i.id === item)!.usd, nearUsd));
     const open = (db.prepare("SELECT COUNT(*) AS n FROM payments WHERE kind = 'offering' AND client_ip = ? AND status = 'pending' AND tx_hash IS NULL").get(ip) as { n: number }).n;
     if (open >= MAX_OPEN_OFFERINGS_PER_IP) return err(429, 'too_many_open', 'Finish or cancel your other offerings first.');
 
@@ -371,23 +376,24 @@ export class GraveService {
     const outcome = transaction(db, () => {
       const fresh = this.row(row.id)!;
       if (fresh.status === 'fulfilled') return { kind: 'already' as const };
-      const g = db.prepare('SELECT offering_count FROM graves WHERE id = ?').get(row.grave_id) as { offering_count: number } | undefined;
+      const g = db.prepare('SELECT exp FROM graves WHERE id = ?').get(row.grave_id) as { exp: number } | undefined;
       if (!g) return { kind: 'error' as const, reason: 'Your NEAR arrived, but this grave no longer exists.' };
       // payment_id is UNIQUE: a payment can only ever become one offering
-      db.prepare('INSERT INTO offerings (grave_id, payment_id, payer, item, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(row.grave_id, row.id, payer, row.item, row.amount, now);
-      db.prepare('UPDATE graves SET offering_count = offering_count + 1 WHERE id = ?').run(row.grave_id);
+      const exp = itemExp(row.item ?? '');
+      db.prepare('INSERT INTO offerings (grave_id, payment_id, payer, item, amount, exp, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(row.grave_id, row.id, payer, row.item, row.amount, exp, now);
+      db.prepare('UPDATE graves SET offering_count = offering_count + 1, exp = exp + ? WHERE id = ?').run(exp, row.grave_id);
       // first offering by this wallet to this grave: queue its Memorial NFT (one per wallet per grave)
       const queued = db.prepare(`INSERT INTO memorials (grave_id, account_id, status, first_offering_at, created_at, updated_at)
                                  VALUES (?, ?, 'pending', ?, ?, ?) ON CONFLICT (grave_id, account_id) DO NOTHING`)
         .run(row.grave_id, payer, now, now, now);
       db.prepare("UPDATE payments SET status = 'fulfilled', payer = ?, error = NULL, updated_at = ? WHERE id = ?").run(payer, now, row.id);
-      return { kind: 'done' as const, before: g.offering_count, firstMemorial: Number(queued.changes) > 0 };
+      return { kind: 'done' as const, before: g.exp, firstMemorial: Number(queued.changes) > 0 };
     });
     if (outcome.kind === 'done') {
       const g = this.grave(row.grave_id!)!;
       const levelUp = levelFor(outcome.before) !== g.level;
-      this.d.log.info('offering made', { payment: row.id, grave: g.id, item: row.item, payer, amount: row.amount, offerings: g.offerings, level: g.level, tx: row.tx_hash });
+      this.d.log.info('offering made', { payment: row.id, grave: g.id, item: row.item, payer, amount: row.amount, offerings: g.offerings, exp: g.exp, level: g.level, tx: row.tx_hash });
       this.d.onGraveUpdated?.(g, { item: row.item!, payer, levelUp });
       if (outcome.firstMemorial) this.d.onMemorialQueued?.();
     } else if (outcome.kind === 'error') {
@@ -481,7 +487,7 @@ function memeInfo(chain: ChainId, contract: string, m: FtMetadata): MemeInfo {
 function graveInfo(r: GraveRow, recentItems: string[], itemCounts: Record<string, number>): GraveInfo {
   return {
     id: r.id, plot: r.plot, message: r.message, creator: r.creator, createdAt: r.created_at,
-    offerings: r.offering_count, level: levelFor(r.offering_count), recentItems, itemCounts,
+    offerings: r.offering_count, exp: r.exp, level: levelFor(r.exp), recentItems, itemCounts,
     meme: { chain: r.chain as ChainId, contract: r.contract, name: r.name, symbol: r.symbol, decimals: r.decimals, icon: r.icon },
   };
 }
