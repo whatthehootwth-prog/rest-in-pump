@@ -150,7 +150,13 @@ async function main() {
   };
   document.getElementById('snap-btn')!.addEventListener('click', (e) => { snapshot(); (e.currentTarget as HTMLElement).blur(); });
   input.onPress('KeyP', snapshot);
-  input.onPress('Enter', () => chat.focus());
+  // Enter (either Enter key) anywhere in the game focuses and flashes the chat box. It runs before buttons see the
+  // key, so a button still focused from a click (an emote, Snap) is not pressed by mistake.
+  window.addEventListener('keydown', (e) => {
+    if ((e.code !== 'Enter' && e.code !== 'NumpadEnter') || e.repeat || !input.enabled || Input.typing(e.target)) return;
+    e.preventDefault();
+    chat.focus();
+  }, { capture: true });
   input.onPress('KeyE', () => plotCard.press(focus));
 
   // ---- multiplayer

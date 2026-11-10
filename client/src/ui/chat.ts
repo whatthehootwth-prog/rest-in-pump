@@ -24,8 +24,12 @@ export class ChatPanel {
     });
   }
 
-  /** Enter (outside the chat) focuses the input. */
-  focus(): void { if (this.connected) this.input.focus(); }
+  /** Enter (outside the chat) focuses the input and flashes it, so it is obvious where to type. */
+  focus(): void {
+    const form = this.input.form;
+    if (form) { form.classList.remove('flash'); void form.offsetWidth; form.classList.add('flash'); }
+    if (this.connected) this.input.focus();
+  }
 
   setConnected(on: boolean): void {
     this.connected = on;

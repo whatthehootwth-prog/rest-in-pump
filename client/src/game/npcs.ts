@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PLOTS } from '../../../shared/graves.ts';
 import { createOwl, type Owl } from '../owl/owl.ts';
+import { addCoinBadge, ghostify } from './ghost.ts';
 import { NameTag } from '../ui/nametag.ts';
 import { damp, lerpAngle } from '../util/math.ts';
 import { resolveCollisions, type Colliders } from '../world/collision.ts';
@@ -73,6 +74,8 @@ interface Npc {
   joins: boolean;
   /** Its place in a row formation (0, 1, 2... alternating sides). */
   rowIndex: number;
+  /** Whether it already decided on a coin badge (decided once graves are loaded). */
+  badged: boolean;
 }
 
 /** viewYaw: the camera's yaw (the direction the player is looking at the scene). */
@@ -81,6 +84,8 @@ export interface PlayerView { pos: THREE.Vector3; emote: number; entered: boolea
 const rr = (a: number, b: number) => a + Math.random() * (b - a);
 const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
 const GATE = new THREE.Vector3(0, 0, 15.5);
+/** Share of ghosts that wear a coin logo. */
+const BADGE_CHANCE = 0.6;
 
 export class Npcs {
   private readonly list: Npc[] = [];
@@ -106,13 +111,14 @@ export class Npcs {
   private spawn(at: THREE.Vector3) {
     const owl = createOwl();
     owl.setWalk(Math.floor(Math.random() * 9));
+    ghostify(owl);
     const tag = new NameTag('');
     this.scene.add(owl.root, owl.blob, tag.sprite);
     this.list.push({
       owl, tag, pos: at.clone(), yaw: rr(-Math.PI, Math.PI), speed: 0, phase: rr(0, 10), y: 0, vy: 0, grounded: true, land: 0,
       emote: 0, kind: 'idle', target: null, faceYaw: null, until: rr(0.5, 3), walkUntil: 0, nextHop: 0, graveId: null,
       nextGreet: 0, nextTalk: rr(3, 15), slot: this.slots++ % 8, leaving: false,
-      tOff: rr(0, 30), joinEmote: 0, reactAt: 0, joins: false, rowIndex: 0,
+      tOff: rr(0, 30), joinEmote: 0, reactAt: 0, joins: false, rowIndex: 0, badged: false,
     });
   }
 
@@ -207,7 +213,10 @@ export class Npcs {
     let row = 0;
     for (const n of this.list) if (n.kind === 'join') n.rowIndex = row++;
 
+    const graveList = this.graves.graves();
     for (const n of [...this.list]) {
+      // some ghosts wear a dead coin's logo (decided once, as soon as there are graves to pick from)
+      if (!n.badged && graveList.length) { n.badged = true; if (Math.random() < BADGE_CHANCE) addCoinBadge(n.owl, pick(graveList)); }
       const dPlayer = n.pos.distanceTo(pl.pos);
       if (n.leaving) {
         if (n.pos.distanceTo(GATE) < 0.8 || t > n.walkUntil) { this.remove(n); continue; }

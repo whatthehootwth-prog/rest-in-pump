@@ -249,7 +249,6 @@ export class CreateGraveDialog {
     // the coin and its words, then what it costs and what you get
     const view = h('div', { class: 'dlg-step' },
       meme ? tokenRow(meme) : null,
-      h('blockquote', { class: 'ticket-words' }, `“${this.message}”`),
       h('div', { class: 'deal' },
         h('div', { class: 'deal-cost' },
           h('span', { class: 'deal-label' }, 'Cost'),

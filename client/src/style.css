@@ -913,8 +913,6 @@ dialog.game-dlg::backdrop { background: rgba(5, 4, 8, 0.62); backdrop-filter: bl
 @media (prefers-reduced-motion: reduce) { .gifts.intro .gift[aria-checked="true"], .gifts.intro .gift[aria-checked="true"] svg { animation: none; } }
 .token-txt .tick { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #3a3320; color: var(--focus); font-size: 12px; font-weight: 800; vertical-align: 2px; }
 .gm-foot > .btn-quiet:first-child + .btn-quiet { margin-left: 0; }
-.gm-flow .dlg-actions { justify-content: flex-end; }
-.gm-flow .dlg-actions .btn-quiet:first-child { margin-right: 0; }
 .gifts { row-gap: 22px; }
 .gifts.intro .gift[aria-checked="true"] { animation-delay: var(--intro-delay, 0ms); }
 .gifts.intro .gift[aria-checked="true"] svg { animation-delay: calc(0.25s + var(--intro-delay, 0ms)); }
@@ -955,3 +953,13 @@ dialog.game-dlg::backdrop { background: rgba(5, 4, 8, 0.62); backdrop-filter: bl
 @keyframes arrow-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
 @media (max-width: 420px) { .deal-amount b { font-size: 21px; } .deal-get b { font-size: 14px; } .deal { gap: 6px; } }
 @media (prefers-reduced-motion: reduce) { .deal-cost::after, .near-coin, .deal-arrow { animation: none; } }
+.gm-flow .dlg-actions { justify-content: space-between; }
+.gm-flow .dlg-actions .btn-go { margin-left: auto; }
+/* Enter: the chat box flashes gold so it is obvious where to type */
+.chat-form.flash input { animation: chat-flash 0.7s ease-out; }
+@keyframes chat-flash {
+  0% { transform: scale(1.06); box-shadow: 0 0 0 0 rgba(241, 199, 107, 0.9), 0 0 30px rgba(241, 199, 107, 0.6); border-color: #fff3c9; }
+  60% { box-shadow: 0 0 0 10px rgba(241, 199, 107, 0), 0 0 22px rgba(241, 199, 107, 0.35); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .chat-form.flash input { animation: none; } }
