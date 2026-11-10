@@ -3,7 +3,7 @@
  * Replace any of these files with final artwork (same file name) — nothing else needs to change.
  * Run: node scripts/docs-art.ts
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { levelFor, type GraveInfo } from '../shared/graves.ts';
 import { memorialSvg } from '../server/src/nft.ts';
 
@@ -12,7 +12,7 @@ mkdirSync(out, { recursive: true });
 
 const sample = (offerings: number): GraveInfo => ({
   id: 1, plot: 7, message: '', creator: 'example.near', createdAt: 0, offerings, level: levelFor(offerings), recentItems: [], itemCounts: {},
-  meme: { chain: 'near', contract: 'rug.example.near', name: 'Rug Pull', symbol: 'RUG', decimals: 18, icon: null },
+  meme: { chain: 'near', contract: 'rip.example.near', name: 'Rest In Pump', symbol: 'RIP', decimals: 18, icon: 'data:image/png;base64,' + readFileSync('client/public/logo-180.png').toString('base64') },
 });
 [[1, 3], [2, 42], [3, 420], [4, 4200]].forEach(([lvl, n]) => writeFileSync(`${out}/level-${lvl}.svg`, memorialSvg(sample(n))));
 

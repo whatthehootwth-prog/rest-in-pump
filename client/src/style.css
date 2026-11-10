@@ -379,3 +379,21 @@ button.pc-pill:hover:not(:disabled) .pc-action { filter: brightness(1.08); }
 .bb-round details { margin-top: 6px; font-size: 13px; }
 .bb-round summary { cursor: pointer; color: var(--focus); }
 .bb-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; font-size: 12px; }
+
+/* Memorial NFT tiers in the docs */
+.nft-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 14px 0 6px; }
+.nft-card { margin: 0; padding: 8px; border-radius: 14px; background: #1b1a21; border: 1px solid var(--line); transition: transform 0.15s ease; }
+.nft-card:hover { transform: translateY(-3px); }
+.nft-card img { display: block; width: 100%; border-radius: 10px; }
+.nft-card figcaption { display: flex; flex-direction: column; gap: 1px; padding: 8px 2px 2px; }
+.nft-tier { font-weight: 750; font-size: 14px; color: var(--text); }
+.nft-range { font-size: 12px; color: var(--muted); }
+.nft-common { border-color: #6b5a44; }
+.nft-rare { border-color: #4f7fb8; }
+.nft-epic { border-color: #8e5bd0; }
+.nft-legendary { border-color: #e8b53a; box-shadow: 0 0 18px rgba(232, 181, 58, 0.25); }
+.nft-common .nft-tier { color: #d9b48a; }
+.nft-rare .nft-tier { color: #8fc4ff; }
+.nft-epic .nft-tier { color: #d48cff; }
+.nft-legendary .nft-tier { color: #ffcf4a; }
+@media (max-width: 700px) { .nft-grid { grid-template-columns: repeat(2, 1fr); } }
