@@ -462,3 +462,157 @@ dialog.tut h2 { margin: 0; font-size: 26px; font-weight: 900; letter-spacing: 0.
 /* short laptop screens: wider, shorter pictures so the whole card page fits without scrolling */
 @media (min-width: 421px) and (max-height: 820px) { .tut-pic { aspect-ratio: 2.2 / 1; } .tut-head { padding-top: 16px; } .tut-grid { padding-top: 12px; padding-bottom: 12px; } }
 @media (min-width: 421px) and (max-height: 640px) { .tut-pic { aspect-ratio: 2.9 / 1; } .tut-eyebrow { display: none; } dialog.tut h2 { font-size: 20px; } .tut-card h3 { margin-top: 8px; } .tut-card p { margin-bottom: 10px; } .tut-foot { padding-bottom: 14px; } }
+
+/* ---------------------------------------------------------------- game-style grave + offering dialogs */
+dialog.game-dlg {
+  background: linear-gradient(180deg, #211e2a 0%, #16151b 55%); border: 1px solid #3d3848; border-radius: 18px;
+  box-shadow: 0 0 0 1px rgba(241, 199, 107, 0.14), 0 26px 70px rgba(0, 0, 0, 0.65); overflow-x: hidden;
+}
+dialog.game-dlg[open] { animation: tut-pop 0.34s cubic-bezier(0.2, 1.4, 0.4, 1); }
+dialog.game-dlg::backdrop { background: rgba(5, 4, 8, 0.62); backdrop-filter: blur(2px); }
+.game-dlg .dialog-head { gap: 10px; justify-content: flex-start; padding: 16px 16px 12px; border-bottom: 0; }
+.game-dlg .dialog-head h2 { flex: 1; font-size: 19px; font-weight: 900; letter-spacing: 0.01em; }
+.game-dlg .dialog-head .icon-btn { width: 32px; height: 32px; border-radius: 50%; background: #2a2732; border-color: #3d3848; }
+.game-dlg .dialog-head .icon-btn:hover { background: #3a3644; }
+.dlg-badge {
+  display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 12px; background: var(--focus);
+  box-shadow: 0 3px 0 #9c7a2c, 0 6px 14px rgba(0, 0, 0, 0.35); transform: rotate(-6deg);
+}
+.game-dlg .dlg-body { padding: 4px 18px 18px; }
+.game-dlg .lbl { color: var(--focus); font-weight: 800; letter-spacing: 0.1em; }
+
+/* quest steps: numbered coins joined by a track */
+.game-dlg .steps { gap: 0; margin: 0 0 16px; font-size: 12px; }
+.game-dlg .steps li { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 0; border: 0; text-align: center; }
+.game-dlg .steps li:not(:first-child)::before { content: ''; position: absolute; top: 13px; right: 50%; width: 100%; height: 4px; border-radius: 2px; background: #2c2a34; z-index: 0; }
+.game-dlg .steps li.on::before, .game-dlg .steps li.done::before { background: var(--focus); }
+.game-dlg .steps .n {
+  position: relative; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  background: #2c2a34; color: var(--muted); font-weight: 900; font-size: 13px; border: 2px solid #3d3848;
+}
+.game-dlg .steps li.on .n { background: var(--focus); color: #17140c; border-color: #fff3c9; box-shadow: 0 0 0 4px rgba(241, 199, 107, 0.2); animation: step-bob 1.6s ease-in-out infinite; }
+.game-dlg .steps li.done .n { background: #6b5a2a; color: transparent; border-color: #8b7536; }
+.game-dlg .steps li.done .n::after { content: '✓'; position: absolute; color: #fff3c9; font-size: 14px; }
+.game-dlg .steps li.on .t { color: var(--text); font-weight: 700; }
+
+/* chunky buttons */
+.game-dlg .btn { height: 40px; padding: 0 16px; border-radius: 10px; font-weight: 800; border-bottom-width: 3px; transition: transform 0.08s ease; }
+.game-dlg .btn:active:not(:disabled) { transform: translateY(2px); }
+.game-dlg .btn-go { min-width: 120px; background: var(--focus); color: #17140c; border-color: var(--focus); border-bottom-color: #9c7a2c; }
+.game-dlg .btn-go:hover:not(:disabled) { background: #f7d88f; }
+.game-dlg .btn:disabled { border-bottom-color: #1f1e24; }
+.game-dlg input, .game-dlg select { height: 40px; border-radius: 10px; background: #0f0e14; border-color: #34313d; }
+.game-dlg input:focus-visible, .game-dlg select:focus-visible, .game-dlg textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+/* the coin, like a trading card */
+.game-dlg .meme-chip { margin: 12px 0 4px; padding: 10px 12px; gap: 12px; background: linear-gradient(135deg, #2a2633, #1d1b23); border: 1px solid #3d3848; border-radius: 14px; animation: card-in 0.3s cubic-bezier(0.2, 1.3, 0.4, 1); }
+.game-dlg .meme-chip img, .game-dlg .meme-chip .meme-ph { width: 48px; height: 48px; border: 3px solid var(--focus); box-shadow: 0 0 0 3px #17140c; }
+.meme-txt { min-width: 0; }
+.meme-txt b { font-size: 16px; font-weight: 900; }
+.meme-txt .tick { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #3a3320; color: var(--focus) !important; font-size: 12px; font-weight: 800; vertical-align: 2px; }
+.meme-txt .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* last words carved on a little tombstone */
+.slab {
+  position: relative; margin: 2px auto 0; max-width: 360px; padding: 18px 18px 10px; text-align: center;
+  background: radial-gradient(ellipse at 50% 0%, #9c978d 0%, #77736b 70%); border: 3px solid #17140c;
+  border-radius: 120px 120px 10px 10px; box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.18), 0 8px 0 #2a2732, 0 10px 18px rgba(0, 0, 0, 0.4);
+}
+.slab-rip { font: 900 22px/1 Georgia, 'Times New Roman', serif; letter-spacing: 0.14em; color: #2c2924; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35); }
+.slab-name { margin-top: 2px; font-weight: 900; font-size: 13px; color: #3a362f; }
+.game-dlg .slab textarea {
+  margin-top: 8px; min-height: 64px; resize: none; text-align: center; background: rgba(40, 37, 33, 0.18); border: 1px dashed rgba(23, 20, 12, 0.45);
+  border-radius: 8px; color: #1d1b17; font: italic 600 15px/1.35 Georgia, 'Times New Roman', serif;
+}
+.game-dlg .slab textarea::placeholder { color: rgba(29, 27, 23, 0.55); }
+.slab-count { margin: 6px 0 0; font-size: 11px; font-weight: 700; color: #3a362f; }
+
+/* offering: the grave you are visiting */
+.game-dlg .grave-sum { padding: 12px; margin-bottom: 4px; border-radius: 14px; background: #1b1a21; border: 1px solid #34313d; }
+.game-dlg .grave-sum .meme-chip { margin: 0; padding: 0; background: none; border: 0; animation: none; }
+.game-dlg .last-words { margin-top: 10px; border-left: 0; border-radius: 10px; text-align: center; font-family: Georgia, 'Times New Roman', serif; }
+.game-dlg .last-words::before { content: '“'; } .game-dlg .last-words::after { content: '”'; }
+.game-dlg .level-line b { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--lvl, var(--focus)); color: #17140c; font-weight: 900; }
+.grave-sum.lvl-1 { --lvl: #d9b48a; } .grave-sum.lvl-2 { --lvl: #8fc4ff; } .grave-sum.lvl-3 { --lvl: #d48cff; } .grave-sum.lvl-4 { --lvl: #ffcf4a; }
+.game-dlg .progress { position: relative; height: 16px; margin-top: 8px; border-radius: 8px; background: #0f0e14; border: 1px solid #34313d; }
+.game-dlg .progress span { border-radius: 8px; background: linear-gradient(90deg, var(--lvl, var(--focus)), #fff3c9); box-shadow: 0 0 10px var(--lvl, var(--focus)); }
+.game-dlg .progress em { position: absolute; inset: 0; display: grid; place-items: center; font-style: normal; font-size: 10px; font-weight: 900; color: #fff; text-shadow: 0 1px 2px #000; }
+
+/* offering items: big tiles that bounce */
+.game-dlg .items { gap: 10px; }
+.game-dlg .item {
+  position: relative; padding: 12px 6px 10px; border-radius: 14px; border: 2px solid #2f2c38; background: linear-gradient(180deg, #24212c, #1a1920);
+  font-weight: 700; transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.game-dlg .item:hover:not(:disabled) { transform: translateY(-3px); border-color: #4a4555; }
+.game-dlg .item svg { transition: transform 0.2s ease; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.35)); }
+.game-dlg .item[aria-checked="true"] { border-color: var(--focus); background: linear-gradient(180deg, #3a3320, #221f17); box-shadow: 0 0 0 3px rgba(241, 199, 107, 0.18), 0 6px 16px rgba(0, 0, 0, 0.35); }
+.game-dlg .item[aria-checked="true"] svg { transform: scale(1.15) rotate(-6deg); animation: item-wiggle 0.5s ease; }
+.game-dlg .item[aria-checked="true"]::after {
+  content: '✓'; position: absolute; top: -8px; right: -6px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--focus); color: #17140c; font-size: 13px; font-weight: 900; box-shadow: 0 2px 0 #9c7a2c;
+}
+.game-dlg .amt { padding: 6px 14px; border-radius: 999px; font-weight: 800; background: #2a2632; border: 2px solid #3d3848; border-bottom-width: 3px; }
+.game-dlg .amt:hover:not(:disabled) { border-color: var(--focus); color: var(--focus); }
+.game-dlg .unit { font-weight: 700; }
+
+/* status lines and the summary */
+.game-dlg .status { border-radius: 12px; }
+.game-dlg .summary { padding: 12px 14px; border-radius: 14px; background: #1b1a21; border: 1px solid #34313d; }
+.game-dlg .summary dt { font-weight: 700; }
+
+/* the "Buried!" / "Respect +1" screen */
+.celebrate { position: relative; padding: 10px 0 4px; text-align: center; }
+.celebrate::before {
+  content: ''; position: absolute; left: 50%; top: 4px; width: 170px; height: 170px; margin-left: -85px; border-radius: 50%;
+  background: repeating-conic-gradient(rgba(241, 199, 107, 0.16) 0 12deg, transparent 12deg 30deg); animation: rays 12s linear infinite; z-index: 0;
+}
+.cele-art { position: relative; z-index: 1; display: grid; place-items: center; height: 130px; animation: cele-pop 0.6s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+.cele-art svg { filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.35)); }
+.cele-title { position: relative; z-index: 1; margin: 6px 0 2px; font-size: 30px; font-weight: 900; color: var(--focus); text-shadow: 0 3px 0 #6b5a2a; animation: cele-pop 0.6s 0.12s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+.cele-sub { position: relative; z-index: 1; margin: 0 0 8px; color: var(--text); font-weight: 600; }
+.tomb {
+  position: relative; display: grid; justify-items: center; align-content: start; gap: 6px; width: 92px; height: 112px; padding-top: 14px;
+  background: radial-gradient(ellipse at 50% 0%, #a6a197 0%, #77736b 75%); border: 3px solid #17140c; border-radius: 46px 46px 8px 8px;
+  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.18), 0 6px 0 #2a2732;
+}
+.tomb img, .tomb .meme-ph { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 3px solid #17140c; background: #fff; }
+.tomb .meme-ph { background: #3b3846; color: var(--text); font-weight: 900; font-size: 22px; display: grid; place-items: center; }
+.tomb span { font: 900 13px/1 Georgia, 'Times New Roman', serif; letter-spacing: 0.12em; color: #2c2924; }
+.game-dlg .done .dlg-actions { justify-content: center; }
+.game-dlg .done .field-msg { text-align: center; }
+
+@keyframes step-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes card-in { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes item-wiggle { 0% { transform: scale(1); } 40% { transform: scale(1.3) rotate(8deg); } 70% { transform: scale(1.1) rotate(-8deg); } 100% { transform: scale(1.15) rotate(-6deg); } }
+@keyframes cele-pop { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: none; } }
+@keyframes rays { to { transform: rotate(360deg); } }
+@media (max-width: 480px) {
+  .game-dlg .dlg-body { padding: 4px 14px 14px; }
+  .game-dlg .dialog-head h2 { font-size: 17px; }
+  .game-dlg .steps { font-size: 11px; }
+  .game-dlg .dlg-actions .btn { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog.game-dlg[open], .game-dlg .steps li.on .n, .game-dlg .meme-chip, .game-dlg .item[aria-checked="true"] svg, .celebrate::before, .cele-art, .cele-title { animation: none; }
+}
+.preview { display: flex; gap: 16px; align-items: center; padding: 14px; border-radius: 14px; background: #1b1a21; border: 1px solid #34313d; animation: card-in 0.3s cubic-bezier(0.2, 1.3, 0.4, 1); }
+.preview .tomb { flex: none; }
+.preview-txt { min-width: 0; flex: 1; }
+.preview-txt b { font-size: 16px; font-weight: 900; }
+.preview-words { margin: 4px 0 6px; font: italic 600 14px/1.35 Georgia, 'Times New Roman', serif; color: var(--text); overflow-wrap: anywhere; }
+.preview-meta { margin: 2px 0 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.price-tag { display: inline-flex; align-items: baseline; gap: 6px; margin-top: 8px; padding: 4px 12px; border-radius: 999px; background: #3a3320; border: 2px solid var(--focus); transform: rotate(-2deg); }
+.price-tag b { color: var(--focus); font-weight: 900; }
+.price-tag span { font-size: 12px; color: var(--text); }
+@media (max-width: 400px) { .preview { flex-direction: column; text-align: center; } }
+.game-dlg #offer-body .items { margin-top: 0; }
+.game-dlg #offer-body .lbl { margin-top: 14px; }
+.game-dlg .amount-row { margin-top: 0; }
+@media (max-width: 480px) {
+  .game-dlg .items { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .game-dlg .item { padding: 8px 4px 7px; font-size: 11px; line-height: 1.2; }
+  .game-dlg .item svg { width: 30px; height: 30px; }
+  .game-dlg .grave-sum { padding: 10px; }
+  .game-dlg #offer-body .lbl { margin-top: 12px; }
+}

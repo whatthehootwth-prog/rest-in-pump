@@ -205,7 +205,7 @@ export class PayFlow {
     if (P.s === 'done') return null;
     const busy = (text: string) => h('p', { class: 'status busy', role: 'status' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), text);
     const btn = (label: string, fn: () => void, quiet = false) => h('button', { class: quiet ? 'btn btn-quiet' : 'btn', type: 'button', onclick: fn }, label);
-    const act = (label: string) => btn(label, o.onAction);
+    const act = (label: string) => { const b = btn(label, o.onAction); b.classList.add('btn-go'); return b; };
     const close = btn('Close', o.onClose);
     const cancel = btn(this.payment?.status === 'pending' ? (this.noun === 'grave' ? 'Cancel reservation' : 'Cancel') : 'Close',
       () => void this.cancel().then(o.onClose), true);
@@ -221,11 +221,11 @@ export class PayFlow {
       case 'checking': status = busy('Checking your NEAR balance…'); break;
       case 'insufficient':
         status = h('p', { class: 'status bad' }, `Not enough NEAR. You have ${nearLabel(P.balance)} and need ${o.price} (plus a little for the network fee).`);
-        actions = [cancel, act('I topped up — try again')]; break;
+        actions = [cancel, act('I topped up, try again')]; break;
       case 'approve': status = busy('Approve the NEAR transfer in your wallet…'); break;
       case 'confirming': status = busy('Sent. Confirming it on NEAR…'); break;
       case 'slow':
-        status = h('p', { class: 'status' }, `NEAR is taking a while to confirm. You can close this — your ${this.noun} counts as soon as NEAR confirms it, even if you refresh.`);
+        status = h('p', { class: 'status' }, `NEAR is taking a while to confirm. You can close this. Your ${this.noun} counts as soon as NEAR confirms it, even if you refresh.`);
         actions = [close]; break;
       case 'rejected':
         status = h('p', { class: 'status bad' }, 'You cancelled the transfer in your wallet. Nothing was sent.');

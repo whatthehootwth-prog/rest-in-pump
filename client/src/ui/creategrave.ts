@@ -110,10 +110,10 @@ export class CreateGraveDialog {
   private render() {
     const order = ['meme', 'words', 'pay'] as const;
     const steps = h('ol', { class: 'steps', 'aria-label': 'Steps' },
-      ...(['Meme', 'Last words', 'Confirm'] as const).map((label, i) =>
-        h('li', { class: order.indexOf(this.step) === i ? 'on' : order.indexOf(this.step) > i ? 'done' : '' }, label)));
+      ...(['Pick the coin', 'Last words', 'Bury it'] as const).map((label, i) =>
+        h('li', { class: order.indexOf(this.step) === i ? 'on' : order.indexOf(this.step) > i ? 'done' : '' }, h('span', { class: 'n', 'aria-hidden': 'true' }, String(i + 1)), h('span', { class: 't' }, label))));
     const title = document.getElementById('grave-title');
-    if (title) title.textContent = `Create a grave at plot #${this.plot}`;
+    if (title) title.textContent = `Dig a grave · plot #${this.plot}`;
     const view = this.step === 'meme' ? this.renderMeme() : this.step === 'words' ? this.renderWords() : this.renderPay();
     this.body.replaceChildren(steps, view);
   }
@@ -131,7 +131,7 @@ export class CreateGraveDialog {
     const result =
       L.s === 'loading' ? h('p', { class: 'field-msg' }, `Looking it up on ${chainName(this.chain)}…`)
       : L.s === 'error' ? h('p', { class: 'field-msg bad' }, L.msg)
-      : L.s === 'exists' ? h('div', {}, memeChip(L.meme), h('p', { class: 'field-msg bad' }, `$${L.meme.symbol} already has a grave at plot #${L.grave.plot}. Each meme gets one grave — go leave an offering there.`))
+      : L.s === 'exists' ? h('div', {}, memeChip(L.meme), h('p', { class: 'field-msg bad' }, `$${L.meme.symbol} already has a grave at plot #${L.grave.plot}. Each coin gets one grave, so go leave a gift there.`))
       : L.s === 'ok' ? h('div', {}, memeChip(L.meme), L.meme.icon ? null : h('p', { class: 'field-msg' }, 'This token has no logo we can show; its grave will use its first letter.'))
       : h('p', { class: 'field-msg' }, CHAIN_TEXT[this.chain].hint);
     return h('div', { class: 'dlg-step' },
@@ -139,7 +139,7 @@ export class CreateGraveDialog {
       h('div', { class: 'row' }, chainSel, input, h('button', { class: 'btn', type: 'button', disabled: L.s === 'loading', onclick: () => void this.find() }, 'Find')),
       result,
       h('div', { class: 'dlg-actions' },
-        h('button', { class: 'btn', type: 'button', disabled: L.s !== 'ok', onclick: () => { this.step = 'words'; this.render(); } }, 'Next')));
+        h('button', { class: 'btn btn-go', type: 'button', disabled: L.s !== 'ok', onclick: () => { this.step = 'words'; this.render(); } }, 'Next')));
   }
 
   private renderWords() {
@@ -152,14 +152,17 @@ export class CreateGraveDialog {
     ta.value = this.message;
     const valid = !!sanitizeMessage(this.message);
     return h('div', { class: 'dlg-step' },
-      this.lookup.s === 'ok' ? memeChip(this.lookup.meme) : null,
-      h('label', { class: 'lbl', for: 'grave-msg' }, 'Last words'), ta,
-      h('p', { id: 'grave-count', class: 'field-msg' }, `${len}/${MESSAGE_MAX}`),
+      h('label', { class: 'lbl', for: 'grave-msg' }, 'Carve its last words'),
+      h('div', { class: 'slab' },
+        h('div', { class: 'slab-rip', 'aria-hidden': 'true' }, 'R.I.P.'),
+        this.lookup.s === 'ok' ? h('div', { class: 'slab-name', 'aria-hidden': 'true' }, `$${this.lookup.meme.symbol}`) : null,
+        ta,
+        h('p', { id: 'grave-count', class: 'slab-count' }, `${len}/${MESSAGE_MAX}`)),
       h('p', { class: 'field-msg' },
         `Every grave starts as a ${GRAVE_LEVELS[0].name}. Each offering visitors leave adds one to its count, and it grows at ${GRAVE_LEVELS[1].min}, ${GRAVE_LEVELS[2].min} and ${GRAVE_LEVELS[3].min.toLocaleString('en-US')} offerings.`),
       h('div', { class: 'dlg-actions' },
         h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => { this.step = 'meme'; this.render(); } }, 'Back'),
-        h('button', { class: 'btn', type: 'button', onclick: () => { if (sanitizeMessage(this.message)) this.step = 'pay'; this.render(); } }, 'Review')),
+        h('button', { class: 'btn btn-go', type: 'button', onclick: () => { if (sanitizeMessage(this.message)) this.step = 'pay'; this.render(); } }, 'Next')),
       !valid && len > 0 ? h('p', { class: 'field-msg bad' }, 'Leave a message of 1–100 characters.') : null);
   }
 
@@ -169,10 +172,10 @@ export class CreateGraveDialog {
     if (F.s === 'done') {
       const g = F.payment.grave;
       return h('div', { class: 'dlg-step done' },
-        meme ? memeChip(meme) : null,
-        h('p', { class: 'status ok' }, g ? `Done. $${g.meme.symbol} now has a grave at plot #${g.plot}.` : 'Done.'),
-        h('p', { class: 'field-msg' }, 'Creating a grave does not mint an NFT. Anyone who leaves an offering here — you included — gets this grave\'s Memorial NFT with their first offering.'),
-        h('div', { class: 'dlg-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => this.dlg.close() }, 'Done')));
+        h('div', { class: 'celebrate' }, h('div', { class: 'cele-art' }, tombArt(meme)), h('p', { class: 'cele-title' }, 'Buried!'),
+          h('p', { class: 'cele-sub' }, g ? `$${g.meme.symbol} now rests at plot #${g.plot}.` : 'Your grave is ready.')),
+        h('p', { class: 'field-msg' }, 'Now invite the mourners. Anyone who leaves a gift here, you included, gets this grave\'s Memorial NFT with their first one.'),
+        h('div', { class: 'dlg-actions' }, h('button', { class: 'btn btn-go', type: 'button', onclick: () => this.dlg.close() }, 'R.I.P.')));
     }
     if (!cfg) {
       return h('div', { class: 'dlg-step' }, this.configError
@@ -185,24 +188,33 @@ export class CreateGraveDialog {
     }
     const price = nearLabel(amount);
     const acct = this.wallet.account;
-    const summary = h('dl', { class: 'summary' },
-      h('dt', {}, 'Meme'), h('dd', {}, meme ? `${meme.name} ($${meme.symbol})` : '—'),
-      h('dt', {}, 'Plot'), h('dd', {}, `#${this.plot}`),
-      h('dt', {}, 'Last words'), h('dd', {}, `“${this.message}”`),
-      h('dt', {}, 'Price'), h('dd', {}, h('b', {}, price), ` (about ${usdLabel(amount, cfg.nearUsd)})`),
-      h('dt', {}, 'Goes to'), h('dd', { class: 'mono' }, cfg.receiver),
-      h('dt', {}, 'Wallet'), h('dd', {}, acct ? shortAccount(acct) : 'not connected'));
+    // a preview of the grave about to be made, with the price on a tag
+    const summary = h('div', { class: 'preview' },
+      tombArt(meme),
+      h('div', { class: 'preview-txt' },
+        h('b', {}, meme ? `${meme.name} $${meme.symbol}` : 'Your coin'),
+        h('p', { class: 'preview-words' }, `“${this.message}”`),
+        h('p', { class: 'preview-meta' }, `Plot #${this.plot} · goes to `, h('span', { class: 'mono' }, cfg.receiver)),
+        h('p', { class: 'preview-meta' }, `Wallet: ${acct ? shortAccount(acct) : 'not connected yet'}`),
+        h('div', { class: 'price-tag' }, h('b', {}, price), h('span', {}, `≈ ${usdLabel(amount, cfg.nearUsd)}`))));
     return h('div', { class: 'dlg-step' }, summary,
       this.flow.view({
-        price, decimals: cfg.decimals, actionLabel: `Create grave · ${price}`, connectLabel: 'Connect wallet & create grave',
+        price, decimals: cfg.decimals, actionLabel: `Bury it · ${price}`, connectLabel: 'Connect wallet & bury it',
         onAction: () => this.pay(), onClose: () => this.dlg.close(),
         back: () => { this.step = 'words'; this.render(); },
       }));
   }
 }
 
+/** A little tombstone with the coin's logo (or first letter) on it, for the "Buried!" screen. */
+function tombArt(m: MemeInfo | null) {
+  return h('div', { class: 'tomb' },
+    m?.icon ? h('img', { src: m.icon, alt: '' }) : h('div', { class: 'meme-ph' }, (m?.symbol || '?').slice(0, 1).toUpperCase()),
+    h('span', {}, 'R.I.P.'));
+}
+
 export function memeChip(m: MemeInfo) {
   return h('div', { class: 'meme-chip' },
     m.icon ? h('img', { src: m.icon, alt: '' }) : h('div', { class: 'meme-ph' }, (m.symbol || '?').slice(0, 1).toUpperCase()),
-    h('div', {}, h('b', {}, m.name), h('span', {}, ` $${m.symbol}`), h('div', { class: 'mono small muted' }, `${chainName(m.chain)} · ${m.contract}`)));
+    h('div', { class: 'meme-txt' }, h('b', {}, m.name), h('span', { class: 'tick' }, `$${m.symbol}`), h('div', { class: 'mono small muted' }, `${chainName(m.chain)} · ${m.contract}`)));
 }

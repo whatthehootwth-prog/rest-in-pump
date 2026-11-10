@@ -39,7 +39,7 @@ export class OfferingDialog {
     this.wallet = wallet;
     this.flow = new PayFlow(wallet, {
       render: () => this.render(), isOpen: () => this.dlg.open, close: () => this.dlg.close(), toast,
-      doneToast: (p) => `Your ${itemName(p.item ?? '')} was left at $${p.meme.symbol}.`,
+      doneToast: (p) => `${itemName(p.item ?? '')} left at $${p.meme.symbol}.`,
     }, 'offering');
     document.getElementById('offer-close')!.addEventListener('click', () => this.dlg.close());
     this.dlg.addEventListener('close', () => this.flow.stopTimer());
@@ -156,7 +156,7 @@ export class OfferingDialog {
     const g = this.grave;
     if (!g) return;
     const title = document.getElementById('offer-title');
-    if (title) title.textContent = `Leave an offering at $${g.meme.symbol}`;
+    if (title) title.textContent = `Leave a gift for $${g.meme.symbol}`;
     const F = this.flow.state;
     this.body.replaceChildren(graveSummary(g), F.s === 'done' ? this.renderDone(F.payment) : this.renderForm());
   }
@@ -200,15 +200,18 @@ export class OfferingDialog {
     let amount = this.flow.payment?.amount ?? null;
     if (!amount && this.amount.trim()) { const v = this.validAmount(); amount = v === null ? null : v.toString(); }
     const price = amount ? nearLabel(amount) : 'NEAR';
+    const gift = itemName(this.item);
     return h('div', { class: 'dlg-step' },
+      h('p', { class: 'lbl' }, 'Pick a gift'),
       items,
+      h('label', { class: 'lbl', for: 'offer-amount' }, 'How much NEAR?'),
       h('div', { class: 'row amount-row' }, input, h('span', { class: 'unit' }, amount && cfg.nearUsd ? `NEAR · about ${usdLabel(amount, cfg.nearUsd)}` : 'NEAR')), quick,
       h('p', { id: 'offer-amount-msg', class: this.amountError ? 'field-msg bad' : 'field-msg' },
         this.amountError ?? (cfg.offeringMin ? `At least ${nearLabel(cfg.offeringMin)} (about $${cfg.offeringMinUsd}). Every offering counts as one.` : 'Could not get the NEAR price right now. Try again in a minute.')),
       this.memorialNote(),
       this.flow.view({
         price, decimals: cfg.decimals, solo: true,
-        actionLabel: 'Leave offering', connectLabel: 'Connect wallet & leave offering',
+        actionLabel: `Leave ${gift.toLowerCase()}${amount ? ` · ${price}` : ''}`, connectLabel: `Connect wallet & leave ${gift.toLowerCase()}`,
         onAction: () => this.pay(), onClose: () => this.dlg.close(),
       }));
   }
@@ -221,7 +224,7 @@ export class OfferingDialog {
       const link = cfg?.nftContract && m.tokenId
         ? h('a', { href: `https://nearblocks.io/nft-token/${cfg.nftContract}/${encodeURIComponent(m.tokenId)}`, target: '_blank', rel: 'noopener noreferrer' }, 'View')
         : null;
-      nft = h('p', { class: 'field-msg' }, `$${g.meme.symbol} — Memorial #${String(m.serial ?? 0).padStart(3, '0')} is in your wallet. `, link);
+      nft = h('p', { class: 'field-msg' }, `$${g.meme.symbol} Memorial #${String(m.serial ?? 0).padStart(3, '0')} is in your wallet. `, link);
     } else if (m.status === 'failed') {
       nft = h('p', { class: 'field-msg bad' }, m.error ?? 'Minting your Memorial NFT failed.');
     } else if (!cfg?.mintingEnabled) {
@@ -229,17 +232,19 @@ export class OfferingDialog {
     } else {
       nft = h('p', { class: 'field-msg busy-line' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Minting your Memorial NFT…');
     }
+    const art = itemArt(p.item ?? ''); art.setAttribute('width', '72'); art.setAttribute('height', '72');
     return h('div', { class: 'dlg-step done' },
-      h('p', { class: 'status ok' }, `Your ${itemName(p.item ?? '').toLowerCase()} was left at $${g.meme.symbol}.`),
+      h('div', { class: 'celebrate' }, h('div', { class: 'cele-art' }, art), h('p', { class: 'cele-title' }, 'Respect +1'),
+        h('p', { class: 'cele-sub' }, `${itemName(p.item ?? '')} left at $${g.meme.symbol}.`)),
       nft,
-      h('div', { class: 'dlg-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => this.dlg.close() }, 'R.I.P.')));
+      h('div', { class: 'dlg-actions' }, h('button', { class: 'btn btn-go', type: 'button', onclick: () => this.dlg.close() }, 'R.I.P.')));
   }
 }
 
 /** Meme, level and progress to the next level. */
 export function graveSummary(g: GraveInfo): Node {
   const next = nextLevelIn(g.offerings);
-  return h('div', { class: 'grave-sum' },
+  return h('div', { class: `grave-sum lvl-${g.level}` },
     memeChip(g.meme),
     g.message ? h('blockquote', { class: 'last-words' }, g.message) : null,
     levelLine(g),
@@ -259,7 +264,7 @@ function progress(g: GraveInfo): Node {
   const floor = [0, 10, 100, 1000][g.level - 1], span = (g.offerings + next) - floor;
   const pct = Math.max(2, Math.round(((g.offerings - floor) / span) * 100));
   return h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(span), 'aria-valuenow': String(g.offerings - floor), 'aria-label': 'Progress to the next level' },
-    h('span', { style: `width:${pct}%` }));
+    h('span', { style: `width:${pct}%` }), h('em', {}, `${(g.offerings - floor).toLocaleString('en-US')} / ${span.toLocaleString('en-US')}`));
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -275,8 +280,8 @@ export function itemArt(id: string): SVGSVGElement {
   };
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('width', '28');
-  svg.setAttribute('height', '28');
+  svg.setAttribute('width', '40');
+  svg.setAttribute('height', '40');
   svg.setAttribute('aria-hidden', 'true');
   svg.innerHTML = paths[id] ?? '';   // static, trusted markup
   return svg;
