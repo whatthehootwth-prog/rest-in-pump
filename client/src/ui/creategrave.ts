@@ -1,5 +1,5 @@
 import {
-  CHAINS, GRAVE_LEVELS, MESSAGE_MAX, chainName, memeAddress, nearLabel, sanitizeMessage, usdLabel,
+  CHAINS, MESSAGE_MAX, chainName, memeAddress, nearLabel, sanitizeMessage,
   type ChainId, type GraveInfo, type MemeInfo, type PaymentView, type PriceConfig,
 } from '../../../shared/graves.ts';
 import { api } from '../net/api.ts';
@@ -22,7 +22,7 @@ type Lookup =
 /**
  * "Dig a grave": find the coin → carve its last words → send the grave price in NEAR → a level-1 grave on the plot.
  * The left side always shows the grave's Memorial NFT; the right side has the title, steps and a footer that stays
- * at the bottom with Close and the step's main button. Creating a grave does not mint an NFT; memorials come from gifts.
+ * at the bottom. The creator gets the grave's first Memorial NFT (#001); everyone else earns one with their first gift.
  */
 export class CreateGraveDialog {
   private readonly dlg = document.getElementById('grave-dlg') as HTMLDialogElement;
@@ -217,7 +217,6 @@ export class CreateGraveDialog {
         this.wordsError ? h('p', { id: 'grave-words-msg', class: 'field-msg bad', role: 'alert' }, 'Write its last words first (1 to 100 characters).') : h('p', { class: 'field-msg' }, 'Shown on the grave and its Memorial NFT.'),
         h('span', { id: 'grave-count', class: 'count' }, `${len}/${MESSAGE_MAX}`)));
     return [view, [
-      this.closeBtn(),
       h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => { this.step = 'meme'; this.render(); } }, 'Back'),
       h('button', { class: 'btn btn-go', type: 'button', onclick: () => this.toPay() }, 'Next')]];
   }
@@ -233,7 +232,7 @@ export class CreateGraveDialog {
         h('ol', { class: 'next-list' },
           h('li', {}, h('b', {}, 'Everyone can see it now.'), ' Owls walking past can visit your grave.'),
           h('li', {}, h('b', {}, 'Gifts give it EXP.'), ' It levels up and grows as people leave them.'),
-          h('li', {}, h('b', {}, 'First gift = Memorial NFT.'), ' That goes for you too.'))),
+          h('li', {}, h('b', {}, 'Memorial NFT #001 is yours.'), ' It is on its way to your wallet and evolves with the grave.'))),
       [h('button', { class: 'btn btn-go', type: 'button', onclick: () => this.dlg.close() }, 'R.I.P.')]];
     }
     if (!cfg) {
@@ -247,26 +246,26 @@ export class CreateGraveDialog {
     }
     const price = nearLabel(amount);
     const acct = this.wallet.account;
-    // the grave about to be made, like a ticket: coin, plot, words, where it starts, what it costs
-    const ticket = h('div', { class: 'ticket' },
+    // the coin and its words, then what it costs and what you get
+    const view = h('div', { class: 'dlg-step' },
       meme ? tokenRow(meme) : null,
-      h('dl', { class: 'ticket-rows' },
-        h('dt', {}, 'Plot'), h('dd', {}, `#${this.plot}`),
-        h('dt', {}, 'Last words'), h('dd', { class: 'ticket-words' }, `“${this.message}”`),
-        h('dt', {}, 'Starts as'), h('dd', {}, h('span', { class: 'lv-chip' }, 'LV 1'), ` ${GRAVE_LEVELS[0].name}`),
-        h('dt', {}, 'Wallet'), h('dd', {}, acct ? shortAccount(acct) : 'Not connected yet')),
-      h('div', { class: 'ticket-price' },
-        h('span', {}, 'Grave price'),
-        h('b', {}, price),
-        h('small', {}, `about ${usdLabel(amount, cfg.nearUsd)} · goes to ${cfg.receiver}`)));
-    const view = h('div', { class: 'dlg-step' }, ticket,
-      h('p', { class: 'field-msg' }, `Gifts give it EXP: it levels up at ${GRAVE_LEVELS[1].min}, ${GRAVE_LEVELS[2].min} and ${GRAVE_LEVELS[3].min.toLocaleString('en-US')} EXP.`));
+      h('blockquote', { class: 'ticket-words' }, `“${this.message}”`),
+      h('div', { class: 'deal' },
+        h('div', { class: 'deal-cost' },
+          h('span', { class: 'deal-label' }, 'Cost'),
+          h('div', { class: 'deal-amount' }, h('span', { class: 'near-coin', 'aria-hidden': 'true' }, 'N'), h('b', {}, price.replace(' NEAR', '')), h('small', {}, 'NEAR'))),
+        h('div', { class: 'deal-arrow', 'aria-hidden': 'true' }, '▶'),
+        h('div', { class: 'deal-get' },
+          h('span', { class: 'deal-label' }, 'You get'),
+          h('b', {}, 'Memorial NFT #001'),
+          h('small', {}, 'and the grave'))),
+      acct ? h('p', { class: 'deal-wallet' }, `Wallet: ${shortAccount(acct)}`) : null);
     const flow = this.flow.view({
       price, decimals: cfg.decimals, actionLabel: `Bury it · ${price}`, connectLabel: 'Connect wallet & bury it',
       onAction: () => this.pay(), onClose: () => this.dlg.close(),
       back: () => { this.step = 'words'; this.render(); },
     });
-    return [view, [this.closeBtn(), h('div', { class: 'gm-flow' }, flow)]];
+    return [view, [h('div', { class: 'gm-flow' }, flow)]];
   }
 }
 

@@ -120,7 +120,7 @@ TODO.md                roadmap checklist
     browser never loads images from other sites. RPC endpoints: `SOLANA_RPC_URLS`.
 - One price for every grave in USD (`GRAVE_PRICE_USD`, default $1), paid in NEAR at the live NEAR price. Last words:
   1–100 characters. One grave per meme contract, ever. Graves cannot be removed.
-- Creating a grave does **not** mint an NFT. The creator gets a memorial by making an offering like anyone else.
+- The creator gets the grave's **first Memorial NFT (#001)**, queued the moment the grave is created; everyone else earns one with their first gift.
 
 **Offerings**
 - At a grave, **E** opens "Leave a gift". Every gift has a fixed USD price (paid in NEAR at the live price) and gives

@@ -193,8 +193,8 @@ describe('game server', () => {
       price: { usd: async () => 2.5 },
       memorialChain: {
         minterOf: async () => 'minter.test',
-        memorialOf: async (g, a) => (minted.includes(`${g}:${a}`) ? `${g}-1` : null),
-        mint: async ({ graveId, receiver }) => { minted.push(`${graveId}:${receiver}`); return { tokenId: `${graveId}-1`, txHash: 'T' }; },
+        memorialOf: async (g, a) => { const i = minted.indexOf(`${g}:${a}`); return i < 0 ? null : `${g}-${i + 1}`; },
+        mint: async ({ graveId, receiver }) => { minted.push(`${graveId}:${receiver}`); return { tokenId: `${graveId}-${minted.length}`, txHash: 'T' }; },
       },
     });
     const watcher = client(port);
@@ -233,11 +233,12 @@ describe('game server', () => {
       if (detail.mine?.status === 'minted') break;
       await new Promise((r) => setTimeout(r, 20));
     }
-    expect(detail).toMatchObject({ myOfferings: 1, memorials: 1, mine: { status: 'minted', tokenId: `${grave.id}-1` } });
-    const meta = await fetch(`http://127.0.0.1:${port}/nft/token/${grave.id}-1.json`);
+    // the creator (alice) holds #001, bob's gift earned #002
+    expect(detail).toMatchObject({ myOfferings: 1, memorials: 2, mine: { status: 'minted', tokenId: `${grave.id}-2` } });
+    const meta = await fetch(`http://127.0.0.1:${port}/nft/token/${grave.id}-2.json`);
     expect(meta.headers.get('access-control-allow-origin')).toBe('*');
     const body = await json(meta);
-    expect(body.name).toBe('$DOGSHIT — Memorial #001');
+    expect(body.name).toBe('$DOGSHIT — Memorial #002');
     expect(body.image).toBe(`https://rip.example/nft/grave/${grave.id}/media.svg`);
     const attr = Object.fromEntries(body.attributes.map((a: { trait_type: string; value: unknown }) => [a.trait_type, a.value]));
     expect(attr).toMatchObject({

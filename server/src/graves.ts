@@ -349,10 +349,13 @@ export class GraveService {
       if (this.d.db.prepare('SELECT 1 FROM graves WHERE chain = ? AND contract = ?').get(row.chain, row.contract)) {
         return 'Your NEAR arrived, but someone else created a grave for this meme after your reservation expired.';
       }
-      // creating a grave does not mint an NFT; the creator gets one by making an offering like anyone else
-      this.d.db.prepare(`INSERT INTO graves (plot, chain, contract, name, symbol, decimals, icon, message, creator, payment_id, created_at)
+      const ins = this.d.db.prepare(`INSERT INTO graves (plot, chain, contract, name, symbol, decimals, icon, message, creator, payment_id, created_at)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(row.plot, row.chain, row.contract, meme.name, meme.symbol, meme.decimals, meme.icon, row.message, payer, row.id, now);
+      // the creator gets the grave's first Memorial NFT (#001: it is queued before anyone can leave a gift)
+      this.d.db.prepare(`INSERT INTO memorials (grave_id, account_id, status, first_offering_at, created_at, updated_at)
+                         VALUES (?, ?, 'pending', ?, ?, ?) ON CONFLICT (grave_id, account_id) DO NOTHING`)
+        .run(Number(ins.lastInsertRowid), payer, now, now, now);
       this.d.db.prepare("UPDATE payments SET status = 'fulfilled', payer = ?, error = NULL, updated_at = ? WHERE id = ?").run(payer, now, row.id);
       // a late but valid payment wins over someone else's newer, still-unpaid hold on the same plot or meme
       this.d.db.prepare(`UPDATE payments SET status = 'expired', error = 'Someone else created this grave first.', updated_at = ?
@@ -365,6 +368,7 @@ export class GraveService {
       this.d.log.info('grave created', { payment: row.id, grave: g.id, plot: g.plot, contract: g.meme.contract, creator: payer, tx: row.tx_hash });
       this.d.onGraveAdded?.(g);
       this.d.onReservedChanged?.(this.reservedPlots());
+      this.d.onMemorialQueued?.();
     } else if (outcome !== 'already') {
       this.markUnfulfillable(row, payer, outcome, now);
       this.d.onReservedChanged?.(this.reservedPlots());

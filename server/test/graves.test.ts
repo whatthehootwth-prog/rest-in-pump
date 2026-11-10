@@ -106,14 +106,14 @@ describe('graves', () => {
     expect(b.id).toBe(a.id);
   });
 
-  it('confirms a verified payment into a level-1 grave, exactly once, without minting anything', async () => {
+  it('confirms a verified payment into a level-1 grave, exactly once, and queues the creator\'s Memorial NFT', async () => {
     const p = ok(await create()) as PaymentView;
     const done = ok(await svc.confirmPayment(p.id, H(1), 'alice.near', 2000)) as PaymentView;
     expect(done.status).toBe('fulfilled');
     expect(done.grave).toMatchObject({ plot: 1, level: 1, offerings: 0, exp: 0, creator: 'alice.near', message: 'gone too soon', meme: { contract: 'dogshit.near' } });
     expect(added).toHaveLength(1);
-    expect(queued).toBe(0);
-    expect(db.prepare('SELECT COUNT(*) AS n FROM memorials').get()).toMatchObject({ n: 0 });
+    expect(queued).toBe(1);
+    expect(db.prepare('SELECT account_id, status FROM memorials').all()).toEqual([{ account_id: 'alice.near', status: 'pending' }]);
     const again = ok(await svc.confirmPayment(p.id, H(1), 'alice.near', 3000)) as PaymentView;
     expect(again.status).toBe('fulfilled');
     expect(svc.snapshot().graves).toHaveLength(1);
@@ -250,19 +250,20 @@ describe('offerings', () => {
     expect(first.grave).toMatchObject({ offerings: 1, exp: 1, level: 1, recentItems: ['candle'], itemCounts: { candle: 1 } });
     await offer(g.id, 'bob.near', { item: 'rug' });
     await offer(g.id, 'carol.near', { item: 'flowers' });
-    expect(queued).toBe(2);   // bob once, carol once
-    expect(db.prepare('SELECT account_id FROM memorials ORDER BY account_id').all().map((r) => (r as { account_id: string }).account_id)).toEqual(['bob.near', 'carol.near']);
+    expect(queued).toBe(3);   // alice (creator), then bob once, carol once
+    expect(db.prepare('SELECT account_id FROM memorials ORDER BY account_id').all().map((r) => (r as { account_id: string }).account_id)).toEqual(['alice.near', 'bob.near', 'carol.near']);
     const d = ok(svc.detail(g.id, 'bob.near')) as GraveDetail;
-    expect(d).toMatchObject({ grave: { offerings: 3, exp: 43, level: 2, recentItems: ['flowers', 'rug', 'candle'], itemCounts: { candle: 1, rug: 1, flowers: 1 } }, memorials: 2, myOfferings: 2, mine: { status: 'pending' } });
+    expect(d).toMatchObject({ grave: { offerings: 3, exp: 43, level: 2, recentItems: ['flowers', 'rug', 'candle'], itemCounts: { candle: 1, rug: 1, flowers: 1 } }, memorials: 3, myOfferings: 2, mine: { status: 'pending' } });
     expect(d.recent[0]).toMatchObject({ item: 'flowers', payer: 'carol.near' });
     expect(updates.map((u) => [u.grave.offerings, u.grave.exp, u.offering.levelUp])).toEqual([[1, 1, false], [2, 41, true], [3, 43, false]]);
   });
 
-  it('the creator gets a memorial only by making an offering like anyone else', async () => {
+  it('the creator gets the grave\'s first Memorial NFT, and a gift from them does not add a second', async () => {
     const g = await makeGrave('alice.near');
-    expect((ok(svc.detail(g.id, 'alice.near')) as GraveDetail).mine).toBeNull();
+    expect((ok(svc.detail(g.id, 'alice.near')) as GraveDetail).mine).toMatchObject({ account: 'alice.near', status: 'pending' });
     const p = await offer(g.id, 'alice.near');
     expect(p.memorial).toMatchObject({ account: 'alice.near', status: 'pending' });
+    expect(db.prepare('SELECT COUNT(*) AS n FROM memorials').get()).toMatchObject({ n: 1 });
   });
 
   it('never counts repeated confirmations, failed transactions or reused transactions', async () => {
@@ -343,30 +344,31 @@ describe('memorial minting', () => {
     await offer(g.id, 'bob.near');
     await offer(g.id, 'carol.near');
     await minter.run(10_000);
-    expect(chain.calls.map((c) => [c.receiver, c.namePrefix])).toEqual([['bob.near', '$DOGSHIT'], ['carol.near', '$DOGSHIT']]);
-    expect(svc.memorial(g.id, 'bob.near')).toMatchObject({ status: 'minted', tokenId: `${g.id}-1`, serial: 1, error: null });
-    expect(svc.memorial(g.id, 'carol.near')).toMatchObject({ status: 'minted', tokenId: `${g.id}-2`, serial: 2 });
+    // the creator's is #001, then gift-givers in order
+    expect(chain.calls.map((c) => [c.receiver, c.namePrefix])).toEqual([['alice.near', '$DOGSHIT'], ['bob.near', '$DOGSHIT'], ['carol.near', '$DOGSHIT']]);
+    expect(svc.memorial(g.id, 'alice.near')).toMatchObject({ status: 'minted', tokenId: `${g.id}-1`, serial: 1, error: null });
+    expect(svc.memorial(g.id, 'bob.near')).toMatchObject({ status: 'minted', tokenId: `${g.id}-2`, serial: 2 });
+    expect(svc.memorial(g.id, 'carol.near')).toMatchObject({ status: 'minted', tokenId: `${g.id}-3`, serial: 3 });
     await minter.run(20_000);
-    expect(chain.calls).toHaveLength(2);
-    expect(svc.memorialByToken(`${g.id}-1`)).toMatchObject({ personalOfferings: 2, memorial: { account_id: 'bob.near' } });
+    expect(chain.calls).toHaveLength(3);
+    expect(svc.memorialByToken(`${g.id}-2`)).toMatchObject({ personalOfferings: 2, memorial: { account_id: 'bob.near' } });
   });
 
   it('retries with backoff, and recovers when a mint landed but the reply was lost', async () => {
     const chain = new FakeChain();
     const minter = new MemorialMinter({ db, log: silentLogger, graves: svc, chain, minterId: 'minter.test' });
     const g = await makeGrave();
-    await offer(g.id, 'bob.near');
     chain.failNext = 1;
     await minter.run(10_000);
-    expect(svc.memorial(g.id, 'bob.near')).toMatchObject({ status: 'pending', error: 'Minting is being retried.' });
+    expect(svc.memorial(g.id, 'alice.near')).toMatchObject({ status: 'pending', error: 'Minting is being retried.' });
     await minter.run(10_001);   // not due yet
     expect(chain.calls).toHaveLength(1);
     chain.landButFail = true;
     await minter.run(10_000 + 31_000);
-    expect(svc.memorial(g.id, 'bob.near')!.status).toBe('pending');
+    expect(svc.memorial(g.id, 'alice.near')!.status).toBe('pending');
     await minter.run(10_000 + 31_000 + 61_000);   // memorial_of finds it: no second mint
     expect(chain.calls).toHaveLength(2);
-    expect(svc.memorial(g.id, 'bob.near')).toMatchObject({ status: 'minted', tokenId: `${g.id}-1` });
+    expect(svc.memorial(g.id, 'alice.near')).toMatchObject({ status: 'minted', tokenId: `${g.id}-1` });
   });
 
   it('does not mint when the contract names a different minter', async () => {

@@ -925,3 +925,33 @@ dialog.game-dlg::backdrop { background: rgba(5, 4, 8, 0.62); backdrop-filter: bl
 .gift[aria-checked="true"]::after { background: var(--focus); }
 .gift[aria-checked="true"]::before { background: var(--focus); }
 @media (max-width: 760px) { .gifts { row-gap: 18px; } }
+
+/* ---------------------------------------------------------------- Dig a grave step 3: cost -> reward */
+.ticket-words { margin: 0 0 14px; padding: 12px 14px; border-radius: 12px; background: #1b1a21; border: 1px solid #34313d; font: italic 600 15px/1.4 Georgia, 'Times New Roman', serif; text-align: center; overflow-wrap: anywhere; }
+.deal { display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; gap: 10px; }
+.deal-cost, .deal-get {
+  position: relative; display: grid; align-content: center; justify-items: center; gap: 4px; padding: 14px 10px; border-radius: 16px; overflow: hidden; text-align: center;
+}
+.deal-cost { background: linear-gradient(160deg, #4a3f1f, #241f12); border: 2px solid var(--focus); box-shadow: 0 0 22px rgba(241, 199, 107, 0.22), inset 0 -4px 0 rgba(0, 0, 0, 0.3); }
+.deal-cost::after {   /* shine sweeping across the price */
+  content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 35%, rgba(255, 246, 216, 0.22) 50%, transparent 65%);
+  background-size: 250% 100%; animation: exp-shine 2.8s linear infinite; pointer-events: none;
+}
+.deal-get { background: linear-gradient(160deg, #3b2f22, #1d1814); border: 2px solid #d9b48a; }
+.deal-label { font-size: 11px; font-weight: 900; letter-spacing: 0.16em; text-transform: uppercase; color: var(--focus); }
+.deal-get .deal-label { color: #e9c99d; }
+.deal-amount { display: flex; align-items: center; gap: 8px; }
+.deal-amount b { font-size: 26px; font-weight: 900; color: #fff6d8; text-shadow: 0 2px 0 #6b5a2a; line-height: 1; }
+.deal-amount small, .deal-get small { font-size: 12px; font-weight: 800; color: #c9c5bd; }
+.near-coin {
+  display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 50%; font-weight: 900; font-size: 15px; color: #6b4d0c;
+  background: radial-gradient(circle at 35% 30%, #fff6d8, #f1c76b 45%, #b88a2c); box-shadow: 0 2px 0 #7a5a1c, inset 0 0 0 2px rgba(255, 246, 216, 0.6);
+  animation: coin-spin 3s ease-in-out infinite;
+}
+.deal-get b { font-size: 16px; font-weight: 900; color: #fff6d8; }
+.deal-arrow { align-self: center; color: var(--focus); font-size: 16px; animation: arrow-nudge 1.2s ease-in-out infinite; }
+.deal-wallet { margin: 10px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
+@keyframes coin-spin { 0%, 70%, 100% { transform: rotateY(0); } 85% { transform: rotateY(180deg); } }
+@keyframes arrow-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
+@media (max-width: 420px) { .deal-amount b { font-size: 21px; } .deal-get b { font-size: 14px; } .deal { gap: 6px; } }
+@media (prefers-reduced-motion: reduce) { .deal-cost::after, .near-coin, .deal-arrow { animation: none; } }

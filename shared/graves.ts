@@ -113,7 +113,7 @@ export interface GraveInfo {
   plot: number;
   meme: MemeInfo;
   message: string;
-  /** NEAR account that paid to create the grave (creating a grave does not mint an NFT). */
+  /** NEAR account that paid to create the grave (it gets the grave's first Memorial NFT, #001). */
   creator: string;
   createdAt: number;
   /** Community offering count (successful offerings). */
