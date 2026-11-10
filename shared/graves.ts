@@ -45,10 +45,10 @@ export const MESSAGE_MAX = 100;
 /** How many recent offering items are shown around a grave. */
 export const RECENT_ITEMS = 6;
 
-/** Chains a meme can live on. Only NEAR resolves today; the others are planned. */
+/** Chains a meme can live on. NEAR and Solana resolve today; the others are planned. Payment is always in NEAR. */
 export const CHAINS = [
   { id: 'near', name: 'NEAR', live: true },
-  { id: 'solana', name: 'Solana', live: false },
+  { id: 'solana', name: 'Solana', live: true },
   { id: 'base', name: 'Base', live: false },
   { id: 'ethereum', name: 'Ethereum', live: false },
 ] as const;
@@ -59,6 +59,17 @@ export const chainName = (c: string) => CHAINS.find((x) => x.id === c)?.name ?? 
 
 /** NEAR account ids (named or 64-hex implicit), 2-64 chars, lowercase. */
 export const NEAR_ACCOUNT_RE = /^(?=.{2,64}$)(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
+/** Solana mint addresses: base58, 32-44 chars, case-sensitive. */
+export const SOLANA_MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+/** Cleans a pasted token address for its chain (NEAR ids are lowercase, Solana keeps its case). null if it isn't one. */
+export function memeAddress(chain: ChainId, raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  if (chain === 'near') return NEAR_ACCOUNT_RE.test(s.toLowerCase()) ? s.toLowerCase() : null;
+  if (chain === 'solana') return SOLANA_MINT_RE.test(s) ? s : null;
+  return null;
+}
 
 /**
  * 40 empty plots in 5 rows x 8 columns, either side of the central path.

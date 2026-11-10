@@ -30,6 +30,7 @@
     "@near-wallet-selector/modal-ui": "10.1.4",
     "@near-wallet-selector/my-near-wallet": "10.1.4",
     "buffer": "6.0.3",
+    "sharp": "0.34.3",
     "three": "0.160.0",
     "ws": "^8.18.0"
   },

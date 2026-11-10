@@ -21,6 +21,8 @@ export interface Config {
   /** SQLite file for graves and payments. */
   dbPath: string;
   nearRpcUrls: string[];
+  /** Solana RPC endpoints, only used to read Solana memecoins for graves. */
+  solanaRpcUrls: string[];
   /** Account that receives the NEAR for graves and offerings. */
   treasury: string;
   /** USD price to create a grave, and the minimum offering in USD (paid in NEAR at the live price). */
@@ -92,6 +94,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     trustProxy: env.TRUST_PROXY === '1',
     dbPath: env.DB_PATH ?? 'data/rip.sqlite',
     nearRpcUrls: (env.NEAR_RPC_URLS ?? 'https://rpc.mainnet.fastnear.com,https://free.rpc.fastnear.com,https://rpc.mainnet.near.org').split(',').map((s) => s.trim()).filter(Boolean),
+    solanaRpcUrls: (env.SOLANA_RPC_URLS ?? 'https://api.mainnet-beta.solana.com').split(',').map((s) => s.trim()).filter(Boolean),
     treasury: env.TREASURY_ACCOUNT ?? 'whatthehoot.near',
     gravePriceUsd: usd('GRAVE_PRICE_USD', '1'),
     offeringMinUsd: usd('OFFERING_MIN_USD', '0.1'),

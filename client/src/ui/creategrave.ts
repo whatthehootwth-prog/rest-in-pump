@@ -1,11 +1,19 @@
 import {
-  CHAINS, GRAVE_LEVELS, MESSAGE_MAX, NEAR_ACCOUNT_RE, nearLabel, sanitizeMessage, usdLabel,
+  CHAINS, GRAVE_LEVELS, MESSAGE_MAX, chainName, memeAddress, nearLabel, sanitizeMessage, usdLabel,
   type ChainId, type GraveInfo, type MemeInfo, type PaymentView, type PriceConfig,
 } from '../../../shared/graves.ts';
 import { api } from '../net/api.ts';
 import type { Wallet } from '../wallet/wallet.ts';
 import { h, shortAccount } from './dom.ts';
 import { PayFlow } from './payflow.ts';
+
+/** What the address field says for each chain that can have graves. */
+const CHAIN_TEXT: Record<ChainId, { label: string; placeholder: string; hint: string; bad: string }> = {
+  near: { label: 'Meme token contract', placeholder: 'token.example.near', hint: 'Paste the token contract. We read the name and logo straight from NEAR.', bad: 'That does not look like a NEAR token contract address (e.g. token.example.near).' },
+  solana: { label: 'Meme token mint address', placeholder: 'e.g. DezXAZ8z7Pnrn…B263', hint: 'Paste the token mint address (the CA). We read the name and logo from Solana. You still pay in NEAR.', bad: 'That does not look like a Solana token address. It is 32 to 44 letters and numbers.' },
+  base: { label: 'Token contract', placeholder: '', hint: 'Base memes are coming soon.', bad: 'Base memes are coming soon.' },
+  ethereum: { label: 'Token contract', placeholder: '', hint: 'Ethereum memes are coming soon.', bad: 'Ethereum memes are coming soon.' },
+};
 
 type Lookup =
   | { s: 'idle' } | { s: 'loading' } | { s: 'error'; msg: string }
@@ -74,8 +82,8 @@ export class CreateGraveDialog {
   }
 
   private async find() {
-    const contract = this.contract.trim().toLowerCase();
-    if (!NEAR_ACCOUNT_RE.test(contract)) { this.lookup = { s: 'error', msg: 'That does not look like a NEAR token contract address (e.g. token.example.near).' }; this.render(); return; }
+    const contract = memeAddress(this.chain, this.contract);
+    if (!contract) { this.lookup = { s: 'error', msg: CHAIN_TEXT[this.chain].bad }; this.render(); return; }
     this.contract = contract;
     this.lookup = { s: 'loading' };
     this.render();
@@ -112,22 +120,22 @@ export class CreateGraveDialog {
 
   private renderMeme() {
     const input = h('input', {
-      id: 'grave-contract', value: this.contract, placeholder: 'token.example.near', spellcheck: 'false', autocomplete: 'off',
-      'aria-label': 'Token contract address',
+      id: 'grave-contract', value: this.contract, placeholder: CHAIN_TEXT[this.chain].placeholder, spellcheck: 'false', autocomplete: 'off',
+      'aria-label': CHAIN_TEXT[this.chain].label,
       oninput: (e: Event) => { this.contract = (e.target as HTMLInputElement).value; },
       onkeydown: (e: Event) => { if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); void this.find(); } },
     });
-    const chainSel = h('select', { 'aria-label': 'Chain', onchange: (e: Event) => { this.chain = (e.target as HTMLSelectElement).value as ChainId; } },
+    const chainSel = h('select', { 'aria-label': 'Chain', onchange: (e: Event) => { this.chain = (e.target as HTMLSelectElement).value as ChainId; this.lookup = { s: 'idle' }; this.render(); } },
       ...CHAINS.map((c) => h('option', { value: c.id, disabled: !c.live, selected: c.id === this.chain }, c.live ? c.name : `${c.name} (coming soon)`)));
     const L = this.lookup;
     const result =
-      L.s === 'loading' ? h('p', { class: 'field-msg' }, 'Looking it up on NEAR…')
+      L.s === 'loading' ? h('p', { class: 'field-msg' }, `Looking it up on ${chainName(this.chain)}…`)
       : L.s === 'error' ? h('p', { class: 'field-msg bad' }, L.msg)
       : L.s === 'exists' ? h('div', {}, memeChip(L.meme), h('p', { class: 'field-msg bad' }, `$${L.meme.symbol} already has a grave at plot #${L.grave.plot}. Each meme gets one grave — go leave an offering there.`))
       : L.s === 'ok' ? h('div', {}, memeChip(L.meme), L.meme.icon ? null : h('p', { class: 'field-msg' }, 'This token has no logo we can show; its grave will use its first letter.'))
-      : h('p', { class: 'field-msg' }, 'Paste the token contract. We read the name and logo straight from the chain.');
+      : h('p', { class: 'field-msg' }, CHAIN_TEXT[this.chain].hint);
     return h('div', { class: 'dlg-step' },
-      h('label', { class: 'lbl', for: 'grave-contract' }, 'Meme token contract'),
+      h('label', { class: 'lbl', for: 'grave-contract' }, CHAIN_TEXT[this.chain].label),
       h('div', { class: 'row' }, chainSel, input, h('button', { class: 'btn', type: 'button', disabled: L.s === 'loading', onclick: () => void this.find() }, 'Find')),
       result,
       h('div', { class: 'dlg-actions' },
@@ -196,5 +204,5 @@ export class CreateGraveDialog {
 export function memeChip(m: MemeInfo) {
   return h('div', { class: 'meme-chip' },
     m.icon ? h('img', { src: m.icon, alt: '' }) : h('div', { class: 'meme-ph' }, (m.symbol || '?').slice(0, 1).toUpperCase()),
-    h('div', {}, h('b', {}, m.name), h('span', {}, ` $${m.symbol}`), h('div', { class: 'mono small muted' }, m.contract)));
+    h('div', {}, h('b', {}, m.name), h('span', {}, ` $${m.symbol}`), h('div', { class: 'mono small muted' }, `${chainName(m.chain)} · ${m.contract}`)));
 }

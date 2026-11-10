@@ -12,7 +12,10 @@ const META: Record<string, MetadataResult> = {
   'dogshit.near': { ok: true, meta: { name: 'Dog Shit', symbol: 'DOGSHIT', decimals: 18, icon: 'data:image/png;base64,AAAA' } },
   'rug.near': { ok: true, meta: { name: 'Rug', symbol: 'RUG', decimals: 24, icon: null } },
   'nothing.near': { ok: false, code: 'not_found', message: 'No NEAR account with that address.' },
+  'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263': { ok: true, meta: { name: 'Bonk', symbol: 'Bonk', decimals: 5, icon: 'data:image/webp;base64,AAAA' } },
 };
+const BONK = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
+let lookups: string[] = [];
 const NEAR = 10n ** 24n;
 const STEP = 10n ** 18n;          // 0.000001 NEAR
 let nearUsd: number | null = 2.5; // $2.50 per NEAR in these tests, so $0.01 = 0.004 NEAR
@@ -30,14 +33,14 @@ const H = (n: number) => String(n).padStart(6, '0').replace(/0/g, 'a') + 'H'.rep
 const nextTx = () => H(++txn);
 
 beforeEach(() => {
-  added = []; updates = []; queued = 0; nearUsd = 2.5;
+  added = []; updates = []; queued = 0; nearUsd = 2.5; lookups = [];
   verifyResult = (c) => ({ status: 'ok', payer: c.signerId, amount: c.amount });
   db = openDb(':memory:');
   svc = new GraveService({
     db, log: silentLogger, receiver: TREASURY,
     gravePriceUsd: '0.01', offeringMinUsd: '0.01', price: { usd: async () => nearUsd },
     holdMinutes: 15, nftContract: 'memorial.whatthehoot.near', mintingEnabled: true,
-    lookupNear: async (c) => META[c] ?? { ok: false, code: 'not_token', message: 'nope' },
+    lookupMeme: async (chain, c) => (lookups.push(`${chain}:${c}`), META[c]) ?? { ok: false, code: 'not_token', message: 'nope' },
     verify: async (c) => verifyResult(c),
     onGraveAdded: (g) => added.push(g),
     onGraveUpdated: (grave, offering) => updates.push({ grave, offering }),
@@ -58,6 +61,21 @@ const offer = async (graveId: number, payer: string, over: Record<string, unknow
 };
 
 describe('graves', () => {
+  it('Solana memes: mint address keeps its case, is read from Solana, and is paid in NEAR', async () => {
+    const r = await svc.lookup('solana', ` ${BONK} `);
+    expect(r).toMatchObject({ meme: { chain: 'solana', contract: BONK, symbol: 'Bonk' }, grave: null });
+    expect(lookups).toEqual([`solana:${BONK}`]);
+    expect(await svc.lookup('solana', BONK.toLowerCase().replace(/l/g, 'L'))).toMatchObject({ code: 'not_token' });   // lowercased mint is a different address
+    expect(await svc.lookup('solana', 'dogshit.near')).toMatchObject({ code: 'bad_contract' });
+    expect(await svc.lookup('solana', '0OIl' + 'a'.repeat(40))).toMatchObject({ code: 'bad_contract' });   // not base58
+    expect(await svc.lookup('near', BONK)).toMatchObject({ code: 'not_token' });   // lowercased it is a valid NEAR name, but no such token
+    expect(await svc.lookup('base', '0xabc')).toMatchObject({ code: 'chain_unsupported' });
+    const g = await makeGrave('alice.near', { chain: 'solana', contract: BONK });
+    expect(g).toMatchObject({ meme: { chain: 'solana', contract: BONK, name: 'Bonk' }, plot: 1, level: 1 });
+    expect(await create({ plot: 2, chain: 'solana', contract: BONK })).toMatchObject({ code: 'grave_exists' });
+    expect((await svc.lookup('solana', BONK) as { grave: GraveInfo }).grave.id).toBe(g.id);
+  });
+
   it('creates a hold with the exact transfer to make, at one grave price', async () => {
     const p = ok(await create()) as PaymentView;
     expect(p).toMatchObject({ kind: 'grave', status: 'pending', receiver: TREASURY });
@@ -72,7 +90,7 @@ describe('graves', () => {
     expect(await create({ plot: 41 })).toMatchObject({ code: 'bad_plot' });
     expect(await create({ message: 'x'.repeat(101) })).toMatchObject({ code: 'bad_message' });
     expect(await create({ message: '   ' })).toMatchObject({ code: 'bad_message' });
-    expect(await create({ chain: 'solana' })).toMatchObject({ code: 'chain_unsupported' });
+    expect(await create({ chain: 'base' })).toMatchObject({ code: 'chain_unsupported' });
     expect(await create({ contract: 'NOT VALID!!' })).toMatchObject({ code: 'bad_contract' });
     expect(await create({ contract: 'nothing.near' })).toMatchObject({ code: 'not_found' });
   });

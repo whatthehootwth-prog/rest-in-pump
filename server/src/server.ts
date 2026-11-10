@@ -15,6 +15,7 @@ import { createNftRoutes } from './nft.ts';
 import { sillyName } from './names.ts';
 import { Buyback, nearBuybackChain, type BuybackChain } from './buyback.ts';
 import { parseUnits } from '../../shared/graves.ts';
+import { createSolanaLookup } from './solana.ts';
 import { createNearRpc, fetchFtMetadata, nearBalance, verifyNearTransfer, type MetadataResult, type TransferCheck, type TransferResult } from './near.ts';
 import {
   MAX_CLIENT_MESSAGE_BYTES, PROTOCOL_VERSION, parseClientMessage, sanitizeChat,
@@ -44,6 +45,8 @@ export interface GameServer {
 /** Test seams: replace the NEAR calls (everything else is real). */
 export interface ServerOptions {
   near?: { lookup(contract: string): Promise<MetadataResult>; verify(c: TransferCheck): Promise<TransferResult> };
+  /** Replaces the Solana token lookup. */
+  solanaLookup?: (mint: string) => Promise<MetadataResult>;
   db?: Db;
   /** Replaces the buyback chain (turns buyback on with test settings). */
   buybackChain?: BuybackChain;
@@ -78,6 +81,7 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
   const rooms = new RoomManager({ capacity: cfg.roomCapacity, maxRooms: cfg.maxRooms, graceMs: cfg.reconnectGraceMs });
   const db = opts.db ?? openDb(cfg.dbPath);
   const rpc = createNearRpc(cfg.nearRpcUrls);
+  const solanaLookup = opts.solanaLookup ?? createSolanaLookup({ rpcUrls: cfg.solanaRpcUrls });
   const mintingConfigured = !!(cfg.nftContract && cfg.minterAccountId && cfg.minterPrivateKey);
   const priceSource = opts.price ?? createNearPrice(undefined, (err) => log.warn('NEAR price source failed', { err: String((err as Error)?.message ?? err) }));
   const broadcastAll = (msg: ServerMessage) => {
@@ -89,7 +93,9 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
     gravePriceUsd: cfg.gravePriceUsd, offeringMinUsd: cfg.offeringMinUsd,
     price: priceSource,
     holdMinutes: cfg.holdMinutes, nftContract: cfg.nftContract, mintingEnabled: mintingConfigured || !!opts.memorialChain,
-    lookupNear: opts.near?.lookup ?? ((contract) => fetchFtMetadata(rpc, contract)),
+    lookupMeme: (chain, contract) => chain === 'solana'
+      ? solanaLookup(contract)
+      : (opts.near?.lookup ?? ((c: string) => fetchFtMetadata(rpc, c)))(contract),
     verify: opts.near?.verify ?? ((check) => verifyNearTransfer(rpc, check)),
     onGraveAdded: (grave) => broadcastAll({ t: 'grave_added', grave }),
     onReservedChanged: (reserved) => broadcastAll({ t: 'plots_reserved', reserved }),

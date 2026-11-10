@@ -112,8 +112,12 @@ TODO.md                roadmap checklist
 
 **Graves**
 - 40 plots (5 rows x 8, `shared/graves.ts`). Walking up to one highlights the whole plot; **E** opens "Create a grave".
-- The player pastes a NEAR token contract; the server reads name, symbol and logo with `ft_metadata`. Only inline
-  `data:` logos are shown (remote image URLs are ignored for safety).
+- The player picks NEAR or Solana and pastes the token address. Payment is always in NEAR.
+  - NEAR: the server reads name, symbol and logo with `ft_metadata`. Only inline `data:` logos are shown.
+  - Solana (`server/src/solana.ts`): Solana RPC `getAccountInfo` checks it is an SPL / Token-2022 mint and gives decimals;
+    name, ticker and logo come from Jupiter's token list (Token-2022 metadata as a fallback). The logo link is downloaded
+    once by the server (public https only, 4 MB cap, IPFS via several gateways) and stored as a 128 px WebP, so the
+    browser never loads images from other sites. RPC endpoints: `SOLANA_RPC_URLS`.
 - One price for every grave in USD (`GRAVE_PRICE_USD`, default $1), paid in NEAR at the live NEAR price. Last words:
   1–100 characters. One grave per meme contract, ever. Graves cannot be removed.
 - Creating a grave does **not** mint an NFT. The creator gets a memorial by making an offering like anyone else.

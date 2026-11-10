@@ -1,6 +1,6 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import {
-  NEAR_ACCOUNT_RE, RECENT_ITEMS, chainLive, isChain, isOfferingItem, isPlotId, levelFor, parseUnits, plotById, sanitizeMessage,
+  NEAR_ACCOUNT_RE, RECENT_ITEMS, memeAddress, chainLive, isChain, isOfferingItem, isPlotId, levelFor, parseUnits, plotById, sanitizeMessage,
   type ChainId, type GraveDetail, type GraveInfo, type GravesSnapshot, type MemeInfo, type MemorialStatus, type MemorialView,
   type PaymentStatus, type PaymentView, type PriceConfig,
 } from '../../shared/graves.ts';
@@ -35,7 +35,8 @@ export interface GraveServiceDeps {
   /** Memorial NFT contract when minting is configured, else null (memorials still queue). */
   nftContract: string | null;
   mintingEnabled: boolean;
-  lookupNear(contract: string): Promise<MetadataResult>;
+  /** Reads a meme's name, ticker and logo from its own chain. */
+  lookupMeme(chain: ChainId, contract: string): Promise<MetadataResult>;
   verify(check: TransferCheck): Promise<TransferResult>;
   onGraveAdded?(g: GraveInfo): void;
   onGraveUpdated?(g: GraveInfo, offering: { item: string; payer: string; levelUp: boolean }): void;
@@ -160,7 +161,7 @@ export class GraveService {
     const parsed = parseMemeRef(chainRaw, contractRaw);
     if ('code' in parsed) return parsed;
     const { chain, contract } = parsed;
-    const res = await this.d.lookupNear(contract);
+    const res = await this.d.lookupMeme(chain, contract);
     if (!res.ok) return err(res.code === 'unavailable' ? 503 : 404, res.code, res.message);
     return { meme: memeInfo(chain, contract, res.meta), grave: this.graveByContract(chain, contract) };
   }
@@ -195,7 +196,7 @@ export class GraveService {
     if (holds >= MAX_HOLDS_PER_IP) return err(429, 'too_many_holds', 'Finish or cancel your other grave first.');
 
     // never trust metadata from the browser: resolve it here
-    const res = await this.d.lookupNear(contract);
+    const res = await this.d.lookupMeme(chain, contract);
     if (!res.ok) return err(res.code === 'unavailable' ? 503 : 404, res.code, res.message);
     const meme = memeInfo(chain, contract, res.meta);
 
@@ -467,9 +468,9 @@ const newId = () => randomBytes(12).toString('base64url');
 
 function parseMemeRef(chainRaw: unknown, contractRaw: unknown): { chain: ChainId; contract: string } | GraveError {
   if (!isChain(chainRaw)) return err(400, 'bad_chain', 'Unknown chain.');
-  if (!chainLive(chainRaw)) return err(400, 'chain_unsupported', 'Only NEAR memes can have graves for now. Other chains are coming.');
-  const contract = typeof contractRaw === 'string' ? contractRaw.trim().toLowerCase() : '';
-  if (!NEAR_ACCOUNT_RE.test(contract)) return err(400, 'bad_contract', 'That does not look like a NEAR token contract address.');
+  if (!chainLive(chainRaw)) return err(400, 'chain_unsupported', 'Only NEAR and Solana memes can have graves for now.');
+  const contract = memeAddress(chainRaw, contractRaw);
+  if (!contract) return err(400, 'bad_contract', chainRaw === 'solana' ? 'That does not look like a Solana token address.' : 'That does not look like a NEAR token contract address.');
   return { chain: chainRaw, contract };
 }
 
