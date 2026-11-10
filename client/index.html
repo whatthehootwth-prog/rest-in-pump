@@ -145,6 +145,44 @@
     </div>
   </dialog>
 
+  <dialog id="tutorial" class="tut" aria-labelledby="tut-title">
+    <div class="tut-head">
+      <p class="tut-eyebrow">Welcome, little owl</p>
+      <h2 id="tut-title">How to play</h2>
+    </div>
+    <ol class="tut-grid">
+      <li class="tut-card">
+        <div class="tut-pic"><img src="/tutorial/walk.webp" alt="" width="720" height="405"><span class="tut-num">1</span>
+          <span class="tut-keys k-desk"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>
+          <span class="tut-keys k-touch"><kbd>◀ ▲ ▶</kbd></span></div>
+        <h3>Walk around</h3>
+        <p><span class="k-desk">Arrows or WASD to walk. Shift to run, Space to hop. Drag to look around.</span><span class="k-touch">Use the pad to walk and Hop to jump. Drag to look around.</span></p>
+      </li>
+      <li class="tut-card">
+        <div class="tut-pic"><img src="/tutorial/grave.webp" alt="" width="720" height="405"><span class="tut-num">2</span>
+          <span class="tut-keys k-desk"><kbd>E</kbd></span><span class="tut-keys k-touch"><kbd>Tap</kbd></span></div>
+        <h3>Bury a dead coin</h3>
+        <p>Stand on an empty plot until it glows, then <span class="k-desk">press <b>E</b></span><span class="k-touch">tap the button</span>. Paste a NEAR or Solana memecoin and write its last words.</p>
+      </li>
+      <li class="tut-card">
+        <div class="tut-pic"><img src="/tutorial/offer.webp" alt="" width="720" height="405"><span class="tut-num">3</span>
+          <span class="tut-keys k-desk"><kbd>E</kbd></span><span class="tut-keys k-touch"><kbd>Tap</kbd></span></div>
+        <h3>Leave an offering</h3>
+        <p>Walk up to any grave and leave flowers, candles and more. Your first offering at a grave gets you its Memorial NFT.</p>
+      </li>
+      <li class="tut-card">
+        <div class="tut-pic"><img src="/tutorial/fun.webp" alt="" width="720" height="405"><span class="tut-num">4</span>
+          <span class="tut-keys k-desk"><kbd>1</kbd><kbd>…</kbd><kbd>5</kbd></span></div>
+        <h3>Mourn together</h3>
+        <p>Dance, club, pray, cry or roll with the buttons below<span class="k-desk"> or keys 1 to 5</span>. <span class="k-desk">Press Enter to chat.</span><span class="k-touch">Tap the chat box to talk.</span></p>
+      </li>
+    </ol>
+    <div class="tut-foot">
+      <p class="small muted">You need a NEAR wallet with a little NEAR to make graves and offerings. Walking around is free.</p>
+      <button id="tut-go" class="btn btn-lg" type="button">Let’s go</button>
+    </div>
+  </dialog>
+
   <header class="hud-top">
     <div class="hud-right">
       <div id="online" class="chip" role="status" aria-live="polite">
@@ -162,6 +200,7 @@
           <button id="wallet-disconnect" class="btn btn-small btn-quiet" type="button">Disconnect</button>
         </div>
       </div>
+      <button id="help-btn" class="icon-btn" type="button" aria-label="How to play" title="How to play"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.7"/><path d="M12 17.2h.01"/></svg></button>
       <button id="sound-btn" class="icon-btn" type="button" aria-label="Mute sound" aria-pressed="false" title="Sound (M)"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h3l5-4v14l-5-4H4z" fill="currentColor" stroke="none"/><path class="snd-wave" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/><path class="snd-x" d="M16 9l5 6M21 9l-5 6"/></svg></button>
     </div>
   </header>

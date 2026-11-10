@@ -13,6 +13,7 @@ import { Hud } from './ui/hud.ts';
 import { ChatPanel } from './ui/chat.ts';
 import { NameTag } from './ui/nametag.ts';
 import { Landing } from './ui/landing.ts';
+import { Tutorial } from './ui/tutorial.ts';
 import { GraveField, type PlotFocus } from './world/graves.ts';
 import { PlotCard } from './ui/plotcard.ts';
 import { CreateGraveDialog } from './ui/creategrave.ts';
@@ -244,6 +245,7 @@ async function main() {
 
   // ---- the intro screen: the world plays behind it; Enter joins the multiplayer world
   let entered = false;
+  const tutorial = new Tutorial();
   const enterWorld = () => {
     entered = true;
     audio.start();
@@ -254,7 +256,10 @@ async function main() {
     // finish a payment (grave or offering) interrupted by a refresh or a wallet redirect
     const q = new URLSearchParams(location.search);
     const hash = q.get('transactionHashes')?.split(',').pop() ?? null;
-    if (q.has('transactionHashes') || q.has('errorCode') || q.has('account_id')) history.replaceState(null, '', location.pathname);
+    const returning = q.has('transactionHashes') || q.has('errorCode') || q.has('account_id');
+    if (returning) history.replaceState(null, '', location.pathname);
+    // first visit: the How to play card (not when coming back from a wallet to finish a payment)
+    if (!returning && !pendingPayment.get()) tutorial.openIfNew();
     void recoverPayment(hash ? { hash, account: q.get('account_id') } : null);
   };
   const recoverPayment = async (redirectTx: { hash: string; account: string | null } | null) => {
@@ -276,6 +281,7 @@ async function main() {
     else await offering.resume(p, redirectTx);
   };
   landing.onEnter = enterWorld;
+  tutorial.onClose = () => canvas.focus();
 
   // ---- render loop
   let last = performance.now(), t = 0;

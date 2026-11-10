@@ -397,3 +397,68 @@ button.pc-pill:hover:not(:disabled) .pc-action { filter: brightness(1.08); }
 .nft-epic .nft-tier { color: #d48cff; }
 .nft-legendary .nft-tier { color: #ffcf4a; }
 @media (max-width: 700px) { .nft-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---------------------------------------------------------------- first-time "How to play" */
+dialog.tut {
+  width: min(860px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0;
+  background: linear-gradient(180deg, #1c1a24 0%, #141319 60%); border: 1px solid #3a3644; border-radius: 16px;
+  box-shadow: 0 0 0 1px rgba(241, 199, 107, 0.12), 0 24px 70px rgba(0, 0, 0, 0.6);
+}
+dialog.tut[open] { animation: tut-pop 0.38s cubic-bezier(0.2, 1.4, 0.4, 1); }
+dialog.tut::backdrop { background: rgba(5, 4, 8, 0.7); backdrop-filter: blur(3px); }
+.tut-head { padding: 22px 24px 4px; text-align: center; }
+.tut-eyebrow { margin: 0 0 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--focus); }
+dialog.tut h2 { margin: 0; font-size: 26px; font-weight: 900; letter-spacing: 0.01em; }
+.tut-grid { list-style: none; margin: 0; padding: 16px 24px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.tut-card {
+  background: #1a1920; border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  animation: tut-card 0.45s both cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+.tut-card:nth-child(2) { animation-delay: 0.07s; } .tut-card:nth-child(3) { animation-delay: 0.14s; } .tut-card:nth-child(4) { animation-delay: 0.21s; }
+.tut-pic { position: relative; aspect-ratio: 16 / 9; background: #0f0e13; }
+.tut-pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tut-num {
+  position: absolute; top: 10px; left: 10px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--focus); color: #17140c; font-weight: 900; font-size: 15px; box-shadow: 0 2px 0 #9c7a2c, 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.tut-keys { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 4px; }
+.tut-keys kbd {
+  min-width: 30px; height: 30px; padding: 0 8px; font: 800 14px/26px ui-sans-serif, system-ui, sans-serif;
+  color: #17140c; background: #f3efd8; border: 1px solid #f3efd8; border-bottom: 4px solid #b8b29a; border-radius: 7px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+}
+.tut-card h3 { margin: 12px 14px 4px; font-size: 16px; font-weight: 800; color: var(--text); text-transform: none; letter-spacing: 0; }
+.tut-card p { margin: 0 14px 14px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.tut-card p b { color: var(--text); }
+.tut-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 24px 22px; }
+.tut-foot p { margin: 0; }
+.tut-foot .btn { min-width: 160px; font-weight: 800; background: var(--focus); border-color: var(--focus); color: #17140c; }
+.tut-foot .btn:hover { background: #f7d88f; }
+.k-touch { display: none; }
+@media (pointer: coarse) { .k-desk { display: none; } .k-touch { display: inline; } .tut-keys.k-touch { display: flex; } }
+@media (max-width: 640px) {
+  .tut-head { padding: 16px 16px 0; }
+  dialog.tut h2 { font-size: 21px; }
+  .tut-grid { grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 12px; }
+  .tut-card h3 { margin: 8px 10px 2px; font-size: 14px; }
+  .tut-card p { margin: 0 10px 10px; font-size: 12px; }
+  .tut-keys kbd { min-width: 24px; height: 24px; padding: 0 5px; font-size: 12px; line-height: 20px; }
+  .tut-num { width: 24px; height: 24px; font-size: 13px; top: 7px; left: 7px; }
+  .tut-foot { flex-direction: column-reverse; align-items: stretch; padding: 0 12px 14px; gap: 8px; text-align: center; }
+}
+/* phones: one compact row per step (picture left, words right) so all four fit on one screen */
+@media (max-width: 520px) {
+  .tut-grid { grid-template-columns: 1fr; }
+  .tut-card { display: grid; grid-template-columns: 118px 1fr; grid-template-rows: auto 1fr; column-gap: 12px; align-items: start; }
+  .tut-pic { grid-row: 1 / 3; aspect-ratio: auto; height: 100%; min-height: 96px; }
+  .tut-card h3 { margin: 10px 10px 2px 0; }
+  .tut-card p { margin: 0 10px 10px 0; }
+  .tut-keys { right: 6px; bottom: 6px; gap: 3px; }
+  .tut-keys kbd { min-width: 20px; height: 22px; padding: 0 4px; font-size: 11px; line-height: 17px; border-bottom-width: 3px; }
+}
+@keyframes tut-pop { from { opacity: 0; transform: scale(0.92) translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes tut-card { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { dialog.tut[open], .tut-card { animation: none; } }
+/* short laptop screens: wider, shorter pictures so the whole card page fits without scrolling */
+@media (min-width: 421px) and (max-height: 820px) { .tut-pic { aspect-ratio: 2.2 / 1; } .tut-head { padding-top: 16px; } .tut-grid { padding-top: 12px; padding-bottom: 12px; } }
+@media (min-width: 421px) and (max-height: 640px) { .tut-pic { aspect-ratio: 2.9 / 1; } .tut-eyebrow { display: none; } dialog.tut h2 { font-size: 20px; } .tut-card h3 { margin-top: 8px; } .tut-card p { margin-bottom: 10px; } .tut-foot { padding-bottom: 14px; } }
