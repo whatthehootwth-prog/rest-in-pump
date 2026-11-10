@@ -4,14 +4,29 @@
     {
       "name": "game",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["server/src/index.ts"],
+      "runtimeArgs": [
+        "server/src/index.ts"
+      ],
       "port": 8787
     },
     {
       "name": "client-dev",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite"],
+      "runtimeArgs": [
+        "vite"
+      ],
       "port": 5173
+    },
+    {
+      "name": "game-lan",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "server/src/index.ts"
+      ],
+      "env": {
+        "HOST": "0.0.0.0"
+      },
+      "port": 8787
     }
   ]
 }
