@@ -291,7 +291,7 @@ async function main() {
     selfTag.sprite.position.set(player.pos.x, player.height + 1.0, player.pos.z);
     selfTag.tick(now);
     remotes.update(dt, t);
-    npcs.update(dt, t, { pos: player.pos, emote: player.emote, entered });
+    npcs.update(dt, t, { pos: player.pos, emote: player.emote, entered, viewYaw: cam.yaw });
     focus = entered ? graves.focusAt(player.pos) : null;
     graves.update(t, focus);
     plotCard.show(focus);

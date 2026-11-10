@@ -168,7 +168,15 @@ input[aria-invalid="true"] { border-color: var(--bad); }
   width: 100%; height: 34px; padding: 0 10px; color: var(--text); font: inherit; font-size: 13px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
 }
-.chat-form input:focus { border-color: #5a5866; outline: none; }
+.chat-form input:focus {
+  border-color: var(--focus); outline: none; background: rgba(14, 13, 18, 0.92);
+  box-shadow: 0 0 0 3px rgba(241, 199, 107, 0.28), 0 0 18px rgba(241, 199, 107, 0.25);
+  animation: chat-pop 0.18s ease-out;
+}
+.chat-form input:focus::placeholder { color: #b9b4a8; }
+.chat:focus-within .chat-log li { background: rgba(14, 13, 18, 0.88); }
+@keyframes chat-pop { 0% { transform: scale(0.97); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .chat-form input:focus { animation: none; } }
 .chat-form input:disabled { opacity: 0.6; }
 
 .toast {

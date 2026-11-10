@@ -16,6 +16,8 @@ export class ChatPanel {
     this.send = send;
     const form = document.getElementById('chat-form') as HTMLFormElement;
     form.addEventListener('submit', (e) => { e.preventDefault(); this.submit(); });
+    this.input.addEventListener('focus', () => { this.input.placeholder = 'Type a message · Enter to send · Esc to close'; });
+    this.input.addEventListener('blur', () => { this.input.placeholder = this.connected ? 'Press Enter to chat' : 'Chat is offline'; });
     this.input.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.preventDefault(); this.input.value = ''; this.input.blur(); }
       e.stopPropagation();   // typing never moves the owl

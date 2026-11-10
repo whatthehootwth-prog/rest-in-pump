@@ -23,7 +23,8 @@ import type { GraveField } from '../world/graves.ts';
  * Now and then they say something in a speech bubble.
  */
 
-export const TOTAL = 10;
+// TEMPORARY: 30 for a test (normally 10)
+export const TOTAL = 30;
 const RADIUS = 0.3;
 const GRAVITY = 12.5;
 const HOP_VELOCITY = 4.4;
@@ -63,9 +64,19 @@ interface Npc {
   slot: number;
   /** Leaving: walks out of the gate, then is removed. */
   leaving: boolean;
+  /** Own animation clock offset, so NPCs never move in perfect sync. */
+  tOff: number;
+  /** The emote it copies from the player (it switches to a new one only after its own delay). */
+  joinEmote: number;
+  /** When it will react to the player's latest emote change; whether it joins that emote at all. */
+  reactAt: number;
+  joins: boolean;
+  /** Its place in a row formation (0, 1, 2... alternating sides). */
+  rowIndex: number;
 }
 
-export interface PlayerView { pos: THREE.Vector3; emote: number; entered: boolean }
+/** viewYaw: the camera's yaw (the direction the player is looking at the scene). */
+export interface PlayerView { pos: THREE.Vector3; emote: number; entered: boolean; viewYaw: number }
 
 const rr = (a: number, b: number) => a + Math.random() * (b - a);
 const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
@@ -78,6 +89,8 @@ export class Npcs {
   private readonly graves: GraveField;
   private target: number;
   private slots = 0;
+  /** The player's emote last frame (to notice changes). */
+  private lastEmote = 0;
 
   constructor(scene: THREE.Scene, colliders: Colliders, graves: GraveField, count = TOTAL - 1) {
     this.scene = scene; this.colliders = colliders; this.graves = graves;
@@ -99,6 +112,7 @@ export class Npcs {
       owl, tag, pos: at.clone(), yaw: rr(-Math.PI, Math.PI), speed: 0, phase: rr(0, 10), y: 0, vy: 0, grounded: true, land: 0,
       emote: 0, kind: 'idle', target: null, faceYaw: null, until: rr(0.5, 3), walkUntil: 0, nextHop: 0, graveId: null,
       nextGreet: 0, nextTalk: rr(3, 15), slot: this.slots++ % 8, leaving: false,
+      tOff: rr(0, 30), joinEmote: 0, reactAt: 0, joins: false, rowIndex: 0,
     });
   }
 
@@ -126,6 +140,30 @@ export class Npcs {
   private nearPlayer(n: Npc, p: THREE.Vector3, r: number) {
     const a = (n.slot / 8) * Math.PI * 2 + 0.4;
     return new THREE.Vector3(p.x + Math.sin(a) * r, 0, p.z + Math.cos(a) * r);
+  }
+
+  /**
+   * Where a joining NPC stands, and which way it faces. Cry: a row in front of the player, facing the camera (you see
+   * their faces). Pray: a row beside the player, facing the way the camera looks. Roll: a row beside the player.
+   * Dance / club: a ring around the player.
+   */
+  private formation(n: Npc, pl: PlayerView): { at: THREE.Vector3; face: number } {
+    const fx = -Math.sin(pl.viewYaw), fz = -Math.cos(pl.viewYaw);   // camera forward (into the scene)
+    const rx = Math.cos(pl.viewYaw), rz = -Math.sin(pl.viewYaw);    // camera right
+    const k = n.rowIndex, side = k % 2 ? -1 : 1, step = Math.ceil((k + 1) / 2);
+    const faceCamera = pl.viewYaw, faceAway = pl.viewYaw + Math.PI;
+    const row = (ahead: number, spacing: number, offsets: number) => new THREE.Vector3(
+      pl.pos.x + fx * ahead + rx * side * offsets * spacing, 0, pl.pos.z + fz * ahead + rz * side * offsets * spacing);
+    if (n.joinEmote === EMOTE.cry) {
+      // centre slot first, then left / right: k=0 -> 0, 1 -> +1, 2 -> -1 ...
+      const off = k === 0 ? 0 : Math.ceil(k / 2);
+      const sd = k % 2 ? 1 : -1;
+      return { at: new THREE.Vector3(pl.pos.x + fx * 2.0 + rx * sd * off * 1.15, 0, pl.pos.z + fz * 2.0 + rz * sd * off * 1.15), face: faceCamera };
+    }
+    if (n.joinEmote === EMOTE.pray) return { at: row(0.1, 1.05, step), face: faceAway };
+    if (n.joinEmote === EMOTE.roll) return { at: row(0.2, 1.5, step), face: faceCamera };
+    const at = this.nearPlayer(n, pl.pos, 1.6);
+    return { at, face: Math.atan2(pl.pos.x - at.x, pl.pos.z - at.z) };
   }
 
   private choose(n: Npc, t: number, pl: PlayerView) {
@@ -160,17 +198,25 @@ export class Npcs {
       this.spawn(GATE.clone().add(new THREE.Vector3(rr(-1, 1), 0, 0)));
     }
 
+    const emoteChanged = pl.emote !== this.lastEmote;
+    this.lastEmote = pl.emote;
+    let row = 0;
+    for (const n of this.list) if (n.kind === 'join') n.rowIndex = row++;
+
     for (const n of [...this.list]) {
       const dPlayer = n.pos.distanceTo(pl.pos);
       if (n.leaving) {
         if (n.pos.distanceTo(GATE) < 0.8 || t > n.walkUntil) { this.remove(n); continue; }
       } else {
         // react to the player's emote: nearby NPCs come and do it with you
-        if (pl.entered && pl.emote && dPlayer < 10 && n.kind !== 'join' && Math.random() < dt * 1.2) {
-          n.kind = 'join'; n.emote = 0; n.graveId = null; n.walkUntil = t + 10; n.until = t + 999;
-          this.say(n, t, LINES.join, 0.5);
+        if (emoteChanged) { n.reactAt = t + rr(0.4, 2.2); n.joins = Math.random() < 0.75; }
+        if (t >= n.reactAt && n.reactAt > 0) {
+          n.reactAt = 0;
+          if (pl.entered && pl.emote && n.joins && (n.kind === 'join' || dPlayer < 10)) {
+            if (n.kind !== 'join') { n.kind = 'join'; n.graveId = null; n.until = t + 999; this.say(n, t, LINES.join, 0.4); }
+            n.joinEmote = pl.emote; n.walkUntil = t + 10;
+          } else if (n.kind === 'join') n.until = t;   // you stopped (or it lost interest): back to its own business
         }
-        if (n.kind === 'join' && (!pl.emote || !pl.entered)) n.until = t;   // you stopped: they go back to their business
         // greet: walk up to an idle / wandering NPC
         if (pl.entered && !pl.emote && dPlayer < 2.4 && t >= n.nextGreet && (n.kind === 'wander' || n.kind === 'idle' || n.kind === 'hop')) {
           n.kind = 'greet'; n.target = null; n.emote = 0; n.until = t + 2.6; n.nextGreet = t + 25;
@@ -183,8 +229,11 @@ export class Npcs {
 
       // moving targets that follow the player
       if (!n.leaving && pl.entered) {
-        if (n.kind === 'club' || n.kind === 'join') {
-          n.target = this.nearPlayer(n, pl.pos, n.kind === 'join' ? 1.6 : 1.3);
+        if (n.kind === 'join') {
+          const fm = this.formation(n, pl);
+          n.target = fm.at; n.faceYaw = fm.face;
+        } else if (n.kind === 'club') {
+          n.target = this.nearPlayer(n, pl.pos, 1.3);
           n.faceYaw = Math.atan2(pl.pos.x - n.pos.x, pl.pos.z - n.pos.z);
         } else if (n.kind === 'tagalong') {
           n.target = dPlayer > 2.2 ? this.nearPlayer(n, pl.pos, 1.8) : null;
@@ -219,7 +268,7 @@ export class Npcs {
         if (n.faceYaw !== null) n.yaw = lerpAngle(n.yaw, n.faceYaw, 1 - Math.exp(-6 * dt));
         if (n.kind === 'mourn' && n.target) { n.emote = EMOTE.cry; this.say(n, t, LINES.mourn, dt * 0.15); }
         else if (n.kind === 'club') n.emote = EMOTE.club;
-        else if (n.kind === 'join') n.emote = pl.emote;
+        else if (n.kind === 'join') n.emote = n.joinEmote;
         else if (n.kind === 'roll') n.emote = EMOTE.roll;
         else if (n.kind === 'hop' && n.grounded && t >= n.nextHop) {
           n.vy = HOP_VELOCITY * rr(0.75, 1.05); n.grounded = false; n.nextHop = t + rr(0.15, 0.45);
@@ -236,7 +285,7 @@ export class Npcs {
       n.owl.root.position.set(n.pos.x, n.y, n.pos.z);
       n.owl.root.rotation.y = n.yaw;
       if (n.grounded) n.phase += n.speed * dt * 8;
-      n.owl.animate(dt, t, { emote: n.emote, speed: n.speed, phase: n.phase, air: !n.grounded, vy: n.vy, land: n.land });
+      n.owl.animate(dt, t + n.tOff, { emote: n.emote, speed: n.speed, phase: n.phase, air: !n.grounded, vy: n.vy, land: n.land });
       n.tag.sprite.position.set(n.pos.x, n.y + 1.0, n.pos.z);
       n.tag.tick(performance.now());
     }
