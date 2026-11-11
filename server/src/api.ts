@@ -13,7 +13,9 @@ import { NEAR_ACCOUNT_RE } from '../../shared/graves.ts';
  *   GET  /api/graves/:id?account=       one grave, recent offerings, the account's memorial + offering count
  *   GET  /api/meme?chain=&contract=     resolve a meme (name/symbol/logo) and whether it has a grave
  *   POST /api/payments                  { plot, chain, contract, message } hold a plot + meme, get the transfer
- *   POST /api/offerings                 { graveId, item, amount } get the transfer for an offering
+ *   POST /api/offerings                 { graveId, item } get the transfer for an offering (priced by the server)
+ *
+ * Creating, confirming and cancelling an order carry the browser's x-rip-session header: an order belongs to it.
  *   GET  /api/payments/:id              payment status (used to recover after a refresh)
  *   POST /api/payments/:id/confirm      { txHash, accountId } verify on NEAR, then create the grave / count the offering
  *   POST /api/payments/:id/cancel       release an unpaid hold
@@ -24,19 +26,31 @@ import { NEAR_ACCOUNT_RE } from '../../shared/graves.ts';
 const MAX_BODY = 4096;
 const RATE = { perMin: 40, burst: 20 };
 
-export function createApi(graves: GraveService, log: Logger, clientIp: (req: http.IncomingMessage) => string, balanceOf: (account: string) => Promise<string | null>, buybacks: () => unknown = () => ({ enabled: false, rounds: [] })) {
+/** Token bucket per key (an IP): returns true when the key is over its rate. */
+export function createRateLimiter(rate: { perMin: number; burst: number }) {
   const buckets = new Map<string, { tokens: number; at: number }>();
-  const limited = (ip: string): boolean => {
+  return (key: string): boolean => {
     const now = Date.now();
-    const b = buckets.get(ip) ?? { tokens: RATE.burst, at: now };
-    b.tokens = Math.min(RATE.burst, b.tokens + ((now - b.at) / 60000) * RATE.perMin);
+    const b = buckets.get(key) ?? { tokens: rate.burst, at: now };
+    b.tokens = Math.min(rate.burst, b.tokens + ((now - b.at) / 60000) * rate.perMin);
     b.at = now;
-    buckets.set(ip, b);
+    buckets.set(key, b);
     if (buckets.size > 10000) buckets.clear();
     if (b.tokens < 1) return true;
     b.tokens -= 1;
     return false;
   };
+}
+
+/** A browser's own random id (header x-rip-session), so unfinished orders belong to one browser, not to a shared IP. */
+const SESSION_RE = /^[A-Za-z0-9_-]{16,64}$/;
+export function sessionOf(req: http.IncomingMessage): string | null {
+  const v = req.headers['x-rip-session'];
+  return typeof v === 'string' && SESSION_RE.test(v) ? v : null;
+}
+
+export function createApi(graves: GraveService, log: Logger, clientIp: (req: http.IncomingMessage) => string, balanceOf: (account: string) => Promise<string | null>, buybacks: () => unknown = () => ({ enabled: false, rounds: [] })) {
+  const limited = createRateLimiter(RATE);
 
   const send = (res: http.ServerResponse, status: number, body: unknown) => {
     res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
@@ -57,6 +71,7 @@ export function createApi(graves: GraveService, log: Logger, clientIp: (req: htt
   return async function handle(req: http.IncomingMessage, res: http.ServerResponse, url: URL): Promise<boolean> {
     if (!url.pathname.startsWith('/api/')) return false;
     const ip = clientIp(req);
+    const session = sessionOf(req);
     const parts = url.pathname.split('/').filter(Boolean);   // ['api', ...]
     try {
       if (req.method === 'GET' && url.pathname === '/api/config') { send(res, 200, await graves.config()); return true; }
@@ -86,14 +101,14 @@ export function createApi(graves: GraveService, log: Logger, clientIp: (req: htt
       if (req.method === 'POST' && url.pathname === '/api/payments') {
         const body = await readJson(req);
         if (!body) { send(res, 400, { error: { code: 'bad_request', message: 'Expected a JSON body.' } }); return true; }
-        const out = await graves.createGrave({ plot: body.plot, chain: body.chain, contract: body.contract, message: body.message }, ip, Date.now());
+        const out = await graves.createGrave({ plot: body.plot, chain: body.chain, contract: body.contract, message: body.message }, ip, Date.now(), session);
         if (isErr(out)) fail(res, out); else send(res, 201, out);
         return true;
       }
       if (req.method === 'POST' && url.pathname === '/api/offerings') {
         const body = await readJson(req);
         if (!body) { send(res, 400, { error: { code: 'bad_request', message: 'Expected a JSON body.' } }); return true; }
-        const out = await graves.createOffering({ graveId: body.graveId, item: body.item }, ip, Date.now());
+        const out = await graves.createOffering({ graveId: body.graveId, item: body.item }, ip, Date.now(), session);
         if (isErr(out)) fail(res, out); else send(res, 201, out);
         return true;
       }
@@ -105,7 +120,7 @@ export function createApi(graves: GraveService, log: Logger, clientIp: (req: htt
           return true;
         }
         if (req.method === 'POST' && parts[3] === 'cancel') {
-          const out = graves.cancelPayment(id, Date.now());
+          const out = graves.cancelPayment(id, Date.now(), session);
           if (isErr(out)) fail(res, out); else send(res, 200, out);
           return true;
         }
@@ -115,7 +130,7 @@ export function createApi(graves: GraveService, log: Logger, clientIp: (req: htt
             send(res, 400, { error: { code: 'bad_request', message: 'Expected { txHash, accountId }.' } });
             return true;
           }
-          const out = await graves.confirmPayment(id, body.txHash, body.accountId, Date.now());
+          const out = await graves.confirmPayment(id, body.txHash, body.accountId, Date.now(), session);
           if (isErr(out)) fail(res, out); else send(res, 200, out);
           return true;
         }

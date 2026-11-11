@@ -9,7 +9,7 @@ import { RoomManager, type Player } from './rooms.ts';
 import { openDb, type Db } from './db.ts';
 import { GraveService } from './graves.ts';
 import { createNearPrice, type NearPrice } from './price.ts';
-import { createApi } from './api.ts';
+import { createApi, createRateLimiter } from './api.ts';
 import { MemorialMinter, nearMemorialChain, type MemorialChain } from './minter.ts';
 import { createNftRoutes } from './nft.ts';
 import { sillyName } from './names.ts';
@@ -125,9 +125,10 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
     enabled: !!buyback, thresholdUsd: bbCfg?.thresholdUsd ?? null, teamPercent: bbCfg?.teamPercent ?? null, teamWallet: bbCfg?.teamWallet ?? null,
     account: bbCfg?.account ?? null, minHoldingWth: bbCfg?.minHoldingWth ?? null, collected: buyback?.collected ?? null, rounds: buyback?.history() ?? [],
   });
-  const nft = createNftRoutes(graves, log.child({ mod: 'nft' }), cfg.publicBaseUrl, cfg.nftContract);
   const clientIp = (req: http.IncomingMessage) =>
     (cfg.trustProxy ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0]?.trim() : '') || req.socket.remoteAddress || '?';
+  const previewLimit = createRateLimiter({ perMin: 30, burst: 15 });
+  const nft = createNftRoutes(graves, log.child({ mod: 'nft' }), cfg.publicBaseUrl, cfg.nftContract, (req) => previewLimit(clientIp(req)));
   const api = createApi(graves, log.child({ mod: 'api' }), clientIp, opts.balance ?? ((account) => nearBalance(rpc, account)), () => buybackInfo());
   const clients = new Set<Client>();
   const byPlayer = new Map<string, Client>();
@@ -401,15 +402,25 @@ const SECURITY_HEADERS = {
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'strict-origin-when-cross-origin',
   'x-frame-options': 'DENY',
+  // other pages (even ones that opened us) get no handle on this window; our own wallet popups still work
+  'cross-origin-opener-policy': 'same-origin-allow-popups',
   'content-security-policy':
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: https:; frame-src https:; frame-ancestors 'none'; base-uri 'self'",
 };
 
+/** True if `file` is `dir` itself or inside it (by whole path parts: dist/client-private is not inside dist/client). */
+export function insideDir(dir: string, file: string): boolean {
+  const rel = path.relative(path.resolve(dir), path.resolve(file));
+  return rel === '' || (rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel));
+}
+
 function serveStatic(root: string, pathname: string, res: http.ServerResponse) {
   let rel: string;
   try { rel = decodeURIComponent(pathname); } catch { res.writeHead(400).end(); return; }
+  // a decoded backslash (%5c) or NUL would be a path separator / terminator on some systems: never part of our URLs
+  if (/[\\\0]/.test(rel)) { res.writeHead(400).end(); return; }
   let file = path.resolve(root, '.' + path.posix.normalize(rel));
-  if (!file.startsWith(root)) { res.writeHead(403).end(); return; }
+  if (!insideDir(root, file)) { res.writeHead(403).end(); return; }
   let st = safeStat(file);
   if (st?.isDirectory()) { file = path.join(file, 'index.html'); st = safeStat(file); }
   if (!st) { file = path.join(root, 'index.html'); st = safeStat(file); }  // single-page app fallback

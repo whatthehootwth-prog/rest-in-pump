@@ -10,12 +10,27 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * This browser's random id. The server ties unfinished orders to it, so people sharing an IP (one Wi-Fi, one mobile
+ * network) never share an order, and only this browser can confirm or cancel its own.
+ */
+const SESSION_KEY = 'rip.session';
+let session: string | null = null;
+function sessionId(): string {
+  if (session) return session;
+  try { const v = localStorage.getItem(SESSION_KEY); if (v && /^[A-Za-z0-9_-]{16,64}$/.test(v)) return (session = v); } catch { /* no storage */ }
+  const bytes = crypto.getRandomValues(new Uint8Array(18));
+  session = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  try { localStorage.setItem(SESSION_KEY, session); } catch { /* this tab only */ }
+  return session;
+}
+
 async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`/api${path}`, {
       method,
-      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+      headers: body === undefined ? { 'x-rip-session': sessionId() } : { 'content-type': 'application/json', 'x-rip-session': sessionId() },
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: 'no-store',
     });

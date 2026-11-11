@@ -160,6 +160,12 @@ const MIGRATIONS: Migration[] = [
   ALTER TABLE graves ADD COLUMN exp INTEGER NOT NULL DEFAULT 0;
   UPDATE graves SET exp = (SELECT COALESCE(SUM(exp), 0) FROM offerings WHERE offerings.grave_id = graves.id);
   ` },
+
+  // 5: an unfinished order belongs to the browser that made it (its random session id), not to whoever shares its IP.
+  { sql: `
+  ALTER TABLE payments ADD COLUMN client_session TEXT;
+  CREATE INDEX payments_session ON payments (client_session, status);
+  ` },
 ];
 
 export function openDb(file: string): Db {

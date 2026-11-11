@@ -32,7 +32,7 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 - [x] Paste a NEAR token contract → name, symbol and logo read from the chain (ft_metadata)
 - [x] Graves and offerings paid in NEAR, priced in USD ($1 per grave, $0.10 minimum offering) at the live NEAR price; the tombstone design comes from the memorial level
 - [x] Last words 1–100 characters; one grave per contract; graves cannot be removed
-- [x] Wallet connect (MyNearWallet, Meteor, HERE, Intear) and NEAR balance check
+- [x] Wallet connect (MyNearWallet, Meteor, HERE; Intear removed for a security issue in its adapter) and NEAR balance check
 - [x] Payment: hold → ft_transfer to whatthehoot.near with memo → verified on NEAR → grave created (one DB transaction)
 - [x] Every payment state: disconnected, connecting, insufficient balance, waiting for approval, sent, confirming,
       done, cancelled in wallet, failed, network error, reservation expired, recovery after refresh / wallet redirect

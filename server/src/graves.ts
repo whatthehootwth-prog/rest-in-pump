@@ -45,12 +45,17 @@ export interface GraveServiceDeps {
 
 export type GraveError = { code: string; message: string; status: number };
 const err = (status: number, code: string, message: string): GraveError => ({ status, code, message });
+/** SQL: the order is this browser's (by session), or, for a caller without a session, an old-style order from its IP. */
+const OWNER = '((? IS NOT NULL AND client_session = ?) OR (client_session IS NULL AND client_ip = ?))';
 
 interface PaymentRow {
   id: string; kind: 'grave' | 'offering'; status: PaymentStatus; amount: string; plot: number; chain: string; contract: string;
   grave_id: number | null; item: string | null; message: string; meme_json: string; tx_hash: string | null; payer: string | null;
-  error: string | null; client_ip: string | null; created_at: number; expires_at: number; updated_at: number;
+  error: string | null; client_ip: string | null; client_session: string | null; created_at: number; expires_at: number; updated_at: number;
 }
+/** Orders made with a session can only be confirmed / cancelled from that browser. */
+const owns = (row: PaymentRow, session: string | null) => !row.client_session || row.client_session === session;
+
 interface GraveRow {
   id: number; plot: number; chain: string; contract: string; name: string; symbol: string; decimals: number | null;
   icon: string | null; message: string; creator: string; payment_id: string; created_at: number; offering_count: number; exp: number;
@@ -61,19 +66,29 @@ export interface MemorialRow {
   first_offering_at: number; created_at: number; updated_at: number;
 }
 
+/** Plots one IP can hold at once (waiting for payment or being confirmed). */
 const MAX_HOLDS_PER_IP = 2;
-const MAX_OPEN_OFFERINGS_PER_IP = 3;
+/** Unpaid gifts one browser can have open, and one IP (many people can share an IP). */
+const MAX_OPEN_OFFERINGS_PER_SESSION = 3;
+const MAX_OPEN_OFFERINGS_PER_IP = 10;
+/** A submitted transaction NEAR has not seen after this long stops holding its plot (it is still re-checked). */
+const UNSEEN_RELEASE_MS = 10 * 60 * 1000;
+/** Verifications started straight from confirm requests at once; the rest are left to the background sweep. */
+const MAX_LIVE_VERIFY = 8;
 const RECENT_OFFERINGS = 10;
 /** After a hold expires, how long we keep re-checking a submitted transaction before giving up. */
 const VERIFY_GIVE_UP_MS = 30 * 60 * 1000;
 
 const META_TTL_MS = 10 * 60_000;
 const META_CACHE_MAX = 500;
+const META_MISS_TTL_MS = 60_000;
 
 export class GraveService {
   private readonly d: GraveServiceDeps;
   /** Recently read coin metadata (name, ticker, logo), so lookups and NFT previews don't hit the chains every time. */
   private readonly metaCache = new Map<string, { at: number; meta: FtMetadata }>();
+  private readonly metaMisses = new Map<string, { at: number; res: MetadataResult }>();
+  private readonly metaRunning = new Map<string, Promise<MetadataResult>>();
   private readonly verifying = new Set<string>();
 
   constructor(deps: GraveServiceDeps) { this.d = deps; }
@@ -164,13 +179,25 @@ export class GraveService {
   private async meta(chain: ChainId, contract: string): Promise<MetadataResult> {
     const key = `${chain}:${contract}`, hit = this.metaCache.get(key), now = Date.now();
     if (hit && now - hit.at < META_TTL_MS) return { ok: true, meta: hit.meta };
-    const res = await this.d.lookupMeme(chain, contract);
-    if (res.ok) {
-      this.metaCache.delete(key);
-      this.metaCache.set(key, { at: now, meta: res.meta });
-      if (this.metaCache.size > META_CACHE_MAX) this.metaCache.delete(this.metaCache.keys().next().value!);
-    }
-    return res;
+    const miss = this.metaMisses.get(key);
+    if (miss && now - miss.at < META_MISS_TTL_MS) return miss.res;
+    // the same coin looked up by many requests at once: one chain lookup (and one logo download) for all of them
+    const running = this.metaRunning.get(key);
+    if (running) return running;
+    const p = this.d.lookupMeme(chain, contract).then((res) => {
+      if (res.ok) {
+        this.metaCache.delete(key);
+        this.metaCache.set(key, { at: Date.now(), meta: res.meta });
+        if (this.metaCache.size > META_CACHE_MAX) this.metaCache.delete(this.metaCache.keys().next().value!);
+      } else if (res.code !== 'unavailable') {
+        // "no such token" answers are remembered for a minute, so repeating a bad address costs nothing
+        this.metaMisses.set(key, { at: Date.now(), res });
+        if (this.metaMisses.size > META_CACHE_MAX) this.metaMisses.delete(this.metaMisses.keys().next().value!);
+      }
+      return res;
+    }).finally(() => this.metaRunning.delete(key));
+    this.metaRunning.set(key, p);
+    return p;
   }
 
   /** Resolves a meme by contract. Also says whether it already has a grave. */
@@ -183,7 +210,7 @@ export class GraveService {
     return { meme: memeInfo(chain, contract, res.meta), grave: this.graveByContract(chain, contract) };
   }
 
-  async createGrave(input: { plot: unknown; chain: unknown; contract: unknown; message: unknown }, ip: string, now: number): Promise<PaymentView | GraveError> {
+  async createGrave(input: { plot: unknown; chain: unknown; contract: unknown; message: unknown }, ip: string, now: number, session: string | null = null): Promise<PaymentView | GraveError> {
     this.expireHolds(now);
     if (!isPlotId(input.plot) || !plotById(input.plot)) return err(400, 'bad_plot', 'That is not an empty grave plot.');
     const message = sanitizeMessage(input.message);
@@ -195,8 +222,8 @@ export class GraveService {
     const db = this.d.db;
 
     // resuming an open hold for exactly the same grave (e.g. after closing the dialog) returns it
-    const mine = db.prepare("SELECT * FROM payments WHERE kind = 'grave' AND plot = ? AND chain = ? AND contract = ? AND client_ip = ? AND status IN ('pending','confirming')")
-      .get(plot, chain, contract, ip) as PaymentRow | undefined;
+    const mine = db.prepare(`SELECT * FROM payments WHERE kind = 'grave' AND plot = ? AND chain = ? AND contract = ? AND ${OWNER} AND status IN ('pending','confirming')`)
+      .get(plot, chain, contract, session, session, ip) as PaymentRow | undefined;
     if (mine && mine.message === message) return this.view(mine);
     if (mine && mine.status === 'pending' && !mine.tx_hash) this.setStatus(mine.id, 'expired', null, now);   // changed their mind: replace it
 
@@ -209,7 +236,8 @@ export class GraveService {
     if (db.prepare("SELECT 1 FROM payments WHERE kind = 'grave' AND chain = ? AND contract = ? AND status IN ('pending','confirming')").get(chain, contract)) {
       return err(409, 'grave_in_progress', 'Someone is creating a grave for this meme right now.');
     }
-    const holds = (db.prepare("SELECT COUNT(*) AS n FROM payments WHERE kind = 'grave' AND client_ip = ? AND status = 'pending'").get(ip) as { n: number }).n;
+    // holds being confirmed count too: a made-up transaction hash must not free up the limit
+    const holds = (db.prepare("SELECT COUNT(*) AS n FROM payments WHERE kind = 'grave' AND client_ip = ? AND status IN ('pending','confirming')").get(ip) as { n: number }).n;
     if (holds >= MAX_HOLDS_PER_IP) return err(429, 'too_many_holds', 'Finish or cancel your other grave first.');
 
     // never trust metadata from the browser: resolve it here
@@ -222,9 +250,9 @@ export class GraveService {
     const amount = this.uniqueAmount(usdToYocto(this.d.gravePriceUsd, nearUsd));
     const id = newId();
     try {
-      db.prepare(`INSERT INTO payments (id, kind, status, amount, plot, chain, contract, message, meme_json, client_ip, created_at, expires_at, updated_at)
-                  VALUES (?, 'grave', 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, amount.toString(), plot, chain, contract, message, JSON.stringify(meme), ip, now, now + this.d.holdMinutes * 60_000, now);
+      db.prepare(`INSERT INTO payments (id, kind, status, amount, plot, chain, contract, message, meme_json, client_ip, client_session, created_at, expires_at, updated_at)
+                  VALUES (?, 'grave', 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, amount.toString(), plot, chain, contract, message, JSON.stringify(meme), ip, session, now, now + this.d.holdMinutes * 60_000, now);
     } catch {
       // lost a race for the plot or the meme (partial unique indexes)
       return err(409, 'plot_reserved', 'Someone grabbed this plot or this meme a moment ago. Try again.');
@@ -235,7 +263,7 @@ export class GraveService {
   }
 
   /** A gift at a grave. The price comes from the gift (its USD price at the live NEAR price), never from the browser. */
-  async createOffering(input: { graveId: unknown; item: unknown }, ip: string, now: number): Promise<PaymentView | GraveError> {
+  async createOffering(input: { graveId: unknown; item: unknown }, ip: string, now: number, session: string | null = null): Promise<PaymentView | GraveError> {
     this.expireHolds(now);
     const graveId = Number(input.graveId);
     const grave = Number.isInteger(graveId) && graveId > 0 ? this.grave(graveId) : null;
@@ -243,20 +271,24 @@ export class GraveService {
     if (!isOfferingItem(input.item)) return err(400, 'bad_item', 'Pick something to leave at the grave.');
     const db = this.d.db;
     const item = input.item;
-    // same gift still waiting for payment from this visitor (closed the dialog, came back): resume it
-    const same = db.prepare("SELECT * FROM payments WHERE kind = 'offering' AND grave_id = ? AND item = ? AND client_ip = ? AND status = 'pending' AND tx_hash IS NULL ORDER BY created_at DESC")
-      .get(graveId, item, ip) as PaymentRow | undefined;
+    // same gift still waiting for payment from this browser (closed the dialog, came back): resume it.
+    // Never by IP alone: two wallets on one Wi-Fi must not share an order (only one of their transfers could count).
+    const same = session ? db.prepare("SELECT * FROM payments WHERE kind = 'offering' AND grave_id = ? AND item = ? AND client_session = ? AND status = 'pending' AND tx_hash IS NULL ORDER BY created_at DESC")
+      .get(graveId, item, session) as PaymentRow | undefined : undefined;
     if (same) return this.view(same);
     const nearUsd = await this.d.price.usd();
     if (!nearUsd) return err(503, 'price_unavailable', 'Could not get the NEAR price right now. Try again in a minute.');
     const amount = this.uniqueAmount(usdToYocto(OFFERING_ITEMS.find((i) => i.id === item)!.usd, nearUsd));
-    const open = (db.prepare("SELECT COUNT(*) AS n FROM payments WHERE kind = 'offering' AND client_ip = ? AND status = 'pending' AND tx_hash IS NULL").get(ip) as { n: number }).n;
-    if (open >= MAX_OPEN_OFFERINGS_PER_IP) return err(429, 'too_many_open', 'Finish or cancel your other offerings first.');
+    const openBy = (col: 'client_ip' | 'client_session', v: string) =>
+      (db.prepare(`SELECT COUNT(*) AS n FROM payments WHERE kind = 'offering' AND ${col} = ? AND status = 'pending' AND tx_hash IS NULL`).get(v) as { n: number }).n;
+    if ((session && openBy('client_session', session) >= MAX_OPEN_OFFERINGS_PER_SESSION) || openBy('client_ip', ip) >= MAX_OPEN_OFFERINGS_PER_IP) {
+      return err(429, 'too_many_open', 'Finish or cancel your other offerings first.');
+    }
 
     const id = newId();
-    db.prepare(`INSERT INTO payments (id, kind, status, amount, plot, chain, contract, grave_id, item, message, meme_json, client_ip, created_at, expires_at, updated_at)
-                VALUES (?, 'offering', 'pending', ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?)`)
-      .run(id, amount.toString(), grave.plot, grave.meme.chain, grave.meme.contract, graveId, item, JSON.stringify(grave.meme), ip, now, now + this.d.holdMinutes * 60_000, now);
+    db.prepare(`INSERT INTO payments (id, kind, status, amount, plot, chain, contract, grave_id, item, message, meme_json, client_ip, client_session, created_at, expires_at, updated_at)
+                VALUES (?, 'offering', 'pending', ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?)`)
+      .run(id, amount.toString(), grave.plot, grave.meme.chain, grave.meme.contract, graveId, item, JSON.stringify(grave.meme), ip, session, now, now + this.d.holdMinutes * 60_000, now);
     this.d.log.info('offering payment created', { payment: id, grave: graveId, item, amount: amount.toString() });
     return this.view(this.row(id)!);
   }
@@ -266,9 +298,10 @@ export class GraveService {
     return row ? this.view(row) : err(404, 'not_found', 'Not found.');
   }
 
-  cancelPayment(id: unknown, now: number): PaymentView | GraveError {
+  cancelPayment(id: unknown, now: number, session: string | null = null): PaymentView | GraveError {
     const row = typeof id === 'string' ? this.row(id) : undefined;
     if (!row) return err(404, 'not_found', 'Not found.');
+    if (!owns(row, session)) return err(403, 'not_yours', 'This order was started in another browser.');
     if (row.status === 'pending' && !row.tx_hash) {
       this.setStatus(row.id, 'expired', null, now);
       if (row.kind === 'grave') this.d.onReservedChanged?.(this.reservedPlots());
@@ -277,9 +310,10 @@ export class GraveService {
   }
 
   /** Records the transaction and verifies it. Safe to call repeatedly. */
-  async confirmPayment(id: unknown, txHash: string, signerId: string, now: number): Promise<PaymentView | GraveError> {
+  async confirmPayment(id: unknown, txHash: string, signerId: string, now: number, session: string | null = null): Promise<PaymentView | GraveError> {
     const row = typeof id === 'string' ? this.row(id) : undefined;
     if (!row) return err(404, 'not_found', 'Not found.');
+    if (!owns(row, session)) return err(403, 'not_yours', 'This order was started in another browser.');
     if (!NEAR_ACCOUNT_RE.test(signerId)) return err(400, 'bad_account', 'That is not a NEAR account.');
     if (row.status === 'fulfilled' || row.status === 'failed' || row.status === 'unfulfillable') {
       if (row.tx_hash && row.tx_hash !== txHash) return err(409, 'already_confirmed', 'This was already confirmed with another transaction.');
@@ -294,7 +328,8 @@ export class GraveService {
       const next: PaymentStatus = row.status === 'pending' ? 'confirming' : row.status;
       this.d.db.prepare('UPDATE payments SET status = ?, tx_hash = ?, payer = ?, error = NULL, updated_at = ? WHERE id = ?').run(next, txHash, signerId, now, row.id);
     }
-    await this.verifyNow(row.id, now);
+    // under a flood of confirms, the background sweep checks the rest (the hash is saved either way)
+    if (this.verifying.size < MAX_LIVE_VERIFY) await this.verifyNow(row.id, now);
     return this.view(this.row(row.id)!);
   }
 
@@ -317,6 +352,14 @@ export class GraveService {
         txHash: row.tx_hash, signerId: row.payer, receiver: this.d.receiver, amount: BigInt(row.amount), notBefore: row.created_at,
       });
       if (result.status === 'pending') {
+        if (row.status === 'confirming' && now > row.expires_at && now - row.updated_at > UNSEEN_RELEASE_MS) {
+          // a hash NEAR has never seen stops holding the plot; the record (and its hash) stays and is still checked,
+          // so a real but slow payment is still fulfilled (or flagged for a refund if the plot went to someone else)
+          this.d.db.prepare("UPDATE payments SET status = 'expired', error = ?, updated_at = ? WHERE id = ? AND status = 'confirming'")
+            .run('Your transaction has not shown up on NEAR yet. We keep checking it.', now, row.id);
+          if (row.kind === 'grave') this.d.onReservedChanged?.(this.reservedPlots());
+          return;
+        }
         if (now - row.expires_at > VERIFY_GIVE_UP_MS) {
           this.setStatus(row.id, 'failed', 'The transaction could not be found on NEAR.', now);
           if (row.kind === 'grave') this.d.onReservedChanged?.(this.reservedPlots());

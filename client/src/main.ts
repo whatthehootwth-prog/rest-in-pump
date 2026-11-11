@@ -281,7 +281,7 @@ async function main() {
       hud.toast(p.kind === 'grave' ? `Your $${p.meme.symbol} grave at plot #${p.plot} is ready.` : `Your gift at $${p.meme.symbol} was received.`);
       return;
     }
-    if (p.status === 'failed' || p.status === 'expired') { pendingPayment.clear(); return; }
+    if (p.status === 'failed' || (p.status === 'expired' && !p.txHash)) { pendingPayment.clear(); return; }
     if (p.status === 'confirming') hud.toast('Still confirming your transaction on NEAR…');
     if (p.kind === 'grave') await createGrave.resume(p, redirectTx);
     else await offering.resume(p, redirectTx);

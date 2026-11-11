@@ -11,7 +11,7 @@ import { describe } from './minter.ts';
  *   GET /nft/grave/:id/media.svg     artwork, shared by every memorial of the grave (reflects its current level)
  *   GET /nft/token/:tokenId.json     NEP-177 reference JSON with the memorial's attributes
  */
-export function createNftRoutes(graves: GraveService, log: Logger, publicBaseUrl: string | null, nftContract: string | null) {
+export function createNftRoutes(graves: GraveService, log: Logger, publicBaseUrl: string | null, nftContract: string | null, lookupLimited: (req: http.IncomingMessage) => boolean = () => false) {
   const base = (publicBaseUrl ?? '').replace(/\/+$/, '');
   const headers = (type: string, maxAge: number) => ({
     'content-type': type,
@@ -39,6 +39,8 @@ export function createNftRoutes(graves: GraveService, log: Logger, publicBaseUrl
           res.end(req.method === 'HEAD' ? undefined : memorialSvg(blank({ chain: 'near', contract: '', name: 'Your coin', symbol: '???', decimals: null, icon: null })));
           return true;
         }
+        // a coin preview may look the coin up on its chain (and fetch its logo): rate-limited like /api/meme
+        if (lookupLimited(req)) { res.writeHead(429, { 'content-type': 'text/plain', 'retry-after': '10' }); res.end('Too many requests'); return true; }
         void graves.lookup(url.searchParams.get('chain'), url.searchParams.get('contract')).then((r) => {
           if ('code' in r) { notFound(res); return; }
           res.writeHead(200, headers('image/svg+xml; charset=utf-8', 600));

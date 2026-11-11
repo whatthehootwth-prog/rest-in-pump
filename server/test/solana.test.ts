@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
-import { candidateUrls, createSolanaLookup, iconDataUri } from '../src/solana.ts';
+import { candidateUrls, createSolanaLookup, iconDataUri, imageKind, isPublicIp, publicFetch, readLimited, safeUrl } from '../src/solana.ts';
 
 const MINT = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
 const SPL = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
@@ -86,5 +86,56 @@ describe('solana logos are fetched safely', () => {
     const { f, seen } = fakeFetch(() => json({}), (u) => (u.includes('nftstorage') ? new Response('slow down', { status: 429 }) : image()));
     expect(await iconDataUri(`https://${cid}.ipfs.nftstorage.link`, f)).toMatch(/^data:image\/webp/);
     expect(seen).toEqual([`https://${cid}.ipfs.nftstorage.link/`, `https://ipfs.filebase.io/ipfs/${cid}`]);
+  });
+});
+
+describe('logo fetching cannot reach private networks or use too much memory (audit S02-S04)', () => {
+  it('rejects local-looking names, trailing dots, single labels, other ports and credentials', () => {
+    for (const u of ['https://localhost./a.png', 'https://LOCALHOST/a.png', 'https://intranet/a.png', 'https://printer.lan/a.png', 'https://x.home.arpa/a.png',
+      'https://img.example.com:8443/a.png', 'https://user:pw@img.example.com/a.png', 'https://2130706433/a.png', 'https://0x7f.1/a.png', 'https://[::ffff:127.0.0.1]/a.png']) {
+      expect(safeUrl(u), u).toBeNull();
+    }
+    expect(safeUrl('https://img.example.com/a.png')?.hostname).toBe('img.example.com');
+    expect(safeUrl('https://img.example.com:443/a.png')).not.toBeNull();
+  });
+
+  it('knows which addresses are public, including IPv4 hidden in IPv6', () => {
+    for (const a of ['127.0.0.1', '10.1.2.3', '172.16.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '::1', '::', 'fd00::1',
+      'fe80::1', '::ffff:127.0.0.1', '::ffff:7f00:1', '::ffff:10.0.0.1', '64:ff9b::a00:1', '2002:7f00:1::', 'not-an-ip']) {
+      expect(isPublicIp(a), a).toBe(false);
+    }
+    for (const a of ['1.1.1.1', '104.16.0.1', '2606:4700::1111', '::ffff:1.1.1.1']) expect(isPublicIp(a), a).toBe(true);
+  });
+
+  it('the real fetcher refuses private IP literals before connecting', async () => {
+    await expect(publicFetch('https://127.0.0.1/a.png')).rejects.toThrow(/not a public address/);
+    await expect(publicFetch('https://[::ffff:10.0.0.1]/a.png')).rejects.toThrow(/not a public address/);
+  });
+
+  it('stops reading a body as soon as it goes over the cap, whatever it claimed', async () => {
+    let pulled = 0, cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(c) { pulled++; c.enqueue(new Uint8Array(64 * 1024)); },   // endless, no content-length
+      cancel() { cancelled = true; },
+    });
+    expect(await readLimited(new Response(body), 256 * 1024)).toBeNull();
+    expect(cancelled).toBe(true);
+    expect(pulled).toBeLessThan(10);   // about 256 KB read, not the whole stream
+    const lying = new Response(new Uint8Array(10), { headers: { 'content-length': String(10 * 1024 * 1024) } });
+    expect(await readLimited(lying, 1024)).toBeNull();
+    expect((await readLimited(new Response(new Uint8Array(100)), 1024))?.length).toBe(100);
+  });
+
+  it('only decodes PNG, JPEG, GIF, WebP and SVG, told apart by their bytes', async () => {
+    expect(imageKind(png)).toBe('png');
+    expect(imageKind(await sharp(png).jpeg().toBuffer())).toBe('jpeg');
+    expect(imageKind(await sharp(png).webp().toBuffer())).toBe('webp');
+    expect(imageKind(await sharp(png).gif().toBuffer())).toBe('gif');
+    expect(imageKind(Buffer.from('﻿<?xml version="1.0"?>\n<!-- logo -->\n<svg xmlns="http://www.w3.org/2000/svg"></svg>'))).toBe('svg');
+    expect(imageKind(await sharp(png).tiff().toBuffer())).toBeNull();
+    expect(imageKind(await sharp(png).avif().toBuffer())).toBeNull();   // HEIF family: blocked
+    expect(imageKind(Buffer.from('<html>nope</html>'))).toBeNull();
+    const tiff = fakeFetch(() => json({}), async () => new Response(await sharp(png).tiff().toBuffer()));
+    expect(await iconDataUri('https://img.test/logo.tiff', tiff.f)).toBeNull();
   });
 });

@@ -175,6 +175,28 @@ describe('graves', () => {
     expect(loser.error).toMatch(/taken|someone else/);
   });
 
+  it('a made-up transaction hash neither frees the hold limit nor keeps a plot for long (audit S07)', async () => {
+    verifyResult = () => ({ status: 'pending' });   // NEAR has never seen these hashes
+    META['third.near'] = META['rug.near'];
+    const a = ok(await create({ plot: 1, contract: 'dogshit.near' }, '6.6.6.6', 0)) as PaymentView;
+    const b = ok(await create({ plot: 2, contract: 'rug.near' }, '6.6.6.6', 0)) as PaymentView;
+    const at = 14 * 60_000;   // confirmed (with hashes NEAR never sees) just before the hold runs out
+    ok(await svc.confirmPayment(a.id, H(1), 'x.near', at));
+    ok(await svc.confirmPayment(b.id, H(2), 'x.near', at));
+    expect(await create({ plot: 3, contract: 'third.near' }, '6.6.6.6', at + 10)).toMatchObject({ code: 'too_many_holds' });
+    expect(svc.snapshot().reserved).toEqual([1, 2]);
+    // past the 15 min hold but only 6 min unseen: still held; 10 min unseen: free again
+    await svc.sweep(20 * 60_000);
+    expect(svc.snapshot().reserved).toEqual([1, 2]);
+    await svc.sweep(26 * 60_000);
+    expect(svc.snapshot().reserved).toEqual([]);
+    expect(svc.getPayment(a.id)).toMatchObject({ status: 'expired', txHash: H(1) });
+    // ... but the record is still checked: if the transfer was real after all, the grave is still made
+    verifyResult = (c) => ({ status: 'ok', payer: c.signerId, amount: c.amount });
+    await svc.sweep(27 * 60_000);
+    expect(svc.getPayment(a.id)).toMatchObject({ status: 'fulfilled' });
+  });
+
   it('limits open holds per player and allows cancelling', async () => {
     const a = ok(await create({ plot: 1, contract: 'dogshit.near' })) as PaymentView;
     ok(await create({ plot: 2, contract: 'rug.near' }));
@@ -290,16 +312,39 @@ describe('offerings', () => {
     expect(p.memorial?.account).toBe('realpayer.near');
   });
 
-  it('resumes the same open gift and limits open offerings per visitor', async () => {
+  it('resumes the same open gift for the same browser and limits open offerings per browser', async () => {
     const g = await makeGrave();
-    const a = ok(await svc.createOffering({ graveId: g.id, item: 'candle' }, '5.5.5.5', 3000)) as PaymentView;
-    const b = ok(await svc.createOffering({ graveId: g.id, item: 'candle' }, '5.5.5.5', 3000)) as PaymentView;
+    const S = 'S'.repeat(20);
+    const gift = (item: string, now = 3000, session: string | null = S) => svc.createOffering({ graveId: g.id, item }, '5.5.5.5', now, session);
+    const a = ok(await gift('candle')) as PaymentView;
+    const b = ok(await gift('candle')) as PaymentView;
     expect(b.id).toBe(a.id);
-    ok(await svc.createOffering({ graveId: g.id, item: 'rug' }, '5.5.5.5', 3000));
-    ok(await svc.createOffering({ graveId: g.id, item: 'diamond' }, '5.5.5.5', 3000));
-    expect(await svc.createOffering({ graveId: g.id, item: 'noodles' }, '5.5.5.5', 3000)).toMatchObject({ code: 'too_many_open' });
-    svc.cancelPayment(a.id, 3100);
-    ok(await svc.createOffering({ graveId: g.id, item: 'noodles' }, '5.5.5.5', 3200));
+    ok(await gift('rug'));
+    ok(await gift('diamond'));
+    expect(await gift('noodles')).toMatchObject({ code: 'too_many_open' });
+    expect(svc.cancelPayment(a.id, 3100, 'T'.repeat(20))).toMatchObject({ code: 'not_yours', status: 403 });
+    svc.cancelPayment(a.id, 3100, S);
+    ok(await gift('noodles', 3200));
+  });
+
+  it('never shares an order between two browsers on the same IP (audit S05)', async () => {
+    const g = await makeGrave();
+    const A = 'A'.repeat(20), B = 'B'.repeat(20);
+    const a = ok(await svc.createOffering({ graveId: g.id, item: 'candle' }, '5.5.5.5', 3000, A)) as PaymentView;
+    const b = ok(await svc.createOffering({ graveId: g.id, item: 'candle' }, '5.5.5.5', 3000, B)) as PaymentView;
+    expect(b.id).not.toBe(a.id);
+    expect(b.amount).not.toBe(a.amount);
+    // without a browser id there is no resuming by IP at all
+    const c = ok(await svc.createOffering({ graveId: g.id, item: 'candle' }, '5.5.5.5', 3000)) as PaymentView;
+    const d = ok(await svc.createOffering({ graveId: g.id, item: 'candle' }, '5.5.5.5', 3000)) as PaymentView;
+    expect(d.id).not.toBe(c.id);
+    // both wallets' transfers count, each for its own order
+    expect((ok(await svc.confirmPayment(a.id, nextTx(), 'one.near', 3001, A)) as PaymentView).status).toBe('fulfilled');
+    expect((ok(await svc.confirmPayment(b.id, nextTx(), 'two.near', 3002, B)) as PaymentView).status).toBe('fulfilled');
+    expect(svc.grave(g.id)!.offerings).toBe(2);
+    // an order made in one browser cannot be confirmed from another
+    const e = ok(await svc.createOffering({ graveId: g.id, item: 'rug' }, '5.5.5.5', 3000, A)) as PaymentView;
+    expect(await svc.confirmPayment(e.id, nextTx(), 'two.near', 3003, B)).toMatchObject({ code: 'not_yours', status: 403 });
   });
 
   it('reaches the memorial levels at 25, 250 and 2,500 EXP', async () => {
@@ -439,7 +484,7 @@ describe('database migration', () => {
         PRAGMA user_version = 1;`);
       v1.close();
       const v2 = openDb(file);
-      expect(v2.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 4 });
+      expect(v2.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 5 });
       expect(v2.prepare('SELECT plot, offering_count FROM graves').all()).toMatchObject([{ plot: 3, offering_count: 0 }]);
       expect(v2.prepare('PRAGMA foreign_keys').get()).toMatchObject({ foreign_keys: 1 });
       expect(v2.prepare("SELECT kind FROM payments WHERE id = 'p1'").get()).toMatchObject({ kind: 'grave' });

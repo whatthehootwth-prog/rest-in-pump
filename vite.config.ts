@@ -26,7 +26,7 @@ export default defineConfig({
   },
   test: {
     root: '.',
-    include: ['server/test/**/*.test.ts'],
+    include: ['server/test/**/*.test.ts', 'client/test/**/*.test.ts'],
     environment: 'node',
     testTimeout: 15000,
   },

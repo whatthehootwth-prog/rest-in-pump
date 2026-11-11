@@ -1,5 +1,7 @@
 /**
- * NEAR wallet connection via NEAR Wallet Selector (MyNearWallet, Meteor, HERE, Intear).
+ * NEAR wallet connection via NEAR Wallet Selector (MyNearWallet, Meteor, HERE).
+ * Intear is left out on purpose: its adapter (10.1.4) accepts sign-in messages from any window and then sends
+ * payments to whatever wallet URL that message named. Add it back only once that is fixed upstream.
  * The wallet code is large, so it is only downloaded when the player needs it (connect / pay),
  * or on load if they were already connected in this browser.
  */
@@ -69,20 +71,19 @@ export class Wallet {
   private load(): Promise<Loaded> {
     this.loaded ??= (async () => {
       await import('./polyfills.ts');   // must run before the wallet plugins are evaluated
-      const [core, ui, mnw, meteor, here, intear, tx, css] = await Promise.all([
+      const [core, ui, mnw, meteor, here, tx, css] = await Promise.all([
         import('@near-wallet-selector/core'),
         import('@near-wallet-selector/modal-ui'),
         import('@near-wallet-selector/my-near-wallet'),
         import('@near-wallet-selector/meteor-wallet'),
         import('@near-wallet-selector/here-wallet'),
-        import('@near-wallet-selector/intear-wallet'),
         import('@near-js/transactions'),
         import('@near-wallet-selector/modal-ui/styles.css?inline'),
       ]);
       injectModalCss(css.default);
       const selector = await core.setupWalletSelector({
         network: 'mainnet',
-        modules: [mnw.setupMyNearWallet(), meteor.setupMeteorWallet(), here.setupHereWallet(), intear.setupIntearWallet()],
+        modules: [mnw.setupMyNearWallet(), meteor.setupMeteorWallet(), here.setupHereWallet()],
       });
       const modal = ui.setupModal(selector, { theme: 'dark', description: 'Connect a NEAR wallet to create graves and leave offerings.' });
       const read = () => selector.store.getState().accounts.find((a) => a.active)?.accountId ?? null;

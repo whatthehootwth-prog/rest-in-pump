@@ -38,10 +38,22 @@ export interface PayHost {
   doneToast(p: PaymentView): string;
 }
 
+/** The transfer sent for the pending order, saved the moment the wallet returns it (before telling the server). */
+const SENT_KEY = 'rip.sentTx';
+type SentTx = { id: string; hash: string; account: string };
+
 export const pendingPayment = {
   get(): string | null { try { return localStorage.getItem(PENDING_KEY); } catch { return null; } },
   set(id: string) { try { localStorage.setItem(PENDING_KEY, id); } catch { /* not persisted */ } },
-  clear() { try { localStorage.removeItem(PENDING_KEY); } catch { /* ignore */ } },
+  clear() { try { localStorage.removeItem(PENDING_KEY); localStorage.removeItem(SENT_KEY); } catch { /* ignore */ } },
+  /** The transfer already sent for order `id`, if any: then we confirm it again, never send a second one. */
+  sent(id: string): SentTx | null {
+    try {
+      const v = JSON.parse(localStorage.getItem(SENT_KEY) ?? 'null') as SentTx | null;
+      return v && v.id === id && typeof v.hash === 'string' && typeof v.account === 'string' ? v : null;
+    } catch { return null; }
+  },
+  setSent(v: SentTx) { try { localStorage.setItem(PENDING_KEY, v.id); localStorage.setItem(SENT_KEY, JSON.stringify(v)); } catch { /* not persisted */ } },
 };
 
 export class PayFlow {
@@ -49,6 +61,8 @@ export class PayFlow {
   payment: PaymentView | null = null;
   private timer: number | null = null;
   private polling = false;
+  /** A start() is running: a double click must not open the wallet twice. */
+  private busy = false;
   private readonly wallet: Wallet;
   private readonly host: PayHost;
   private readonly noun: 'grave' | 'offering';
@@ -64,6 +78,15 @@ export class PayFlow {
 
   /** Main button. `create` makes (or resumes) the order on the server. */
   async start(create: () => Promise<PaymentView>, reuse: (p: PaymentView) => boolean): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try { await this.run(create, reuse); } finally { this.busy = false; }
+  }
+
+  private async run(create: () => Promise<PaymentView>, reuse: (p: PaymentView) => boolean): Promise<void> {
+    // this order's transfer was already sent (the server just never heard): confirm that one, don't send again
+    const already = this.payment ? pendingPayment.sent(this.payment.id) : null;
+    if (already && this.payment) { this.set({ s: 'confirming', since: Date.now() }); await this.confirm(already.hash, already.account); return; }
     let account = this.wallet.account;
     if (!account) {
       this.set({ s: 'connecting' });
@@ -82,6 +105,9 @@ export class PayFlow {
       }
     }
     const p = this.payment;
+    // the server handed back an order we already paid (dialog reopened after a lost confirm): confirm it instead
+    const paid = pendingPayment.sent(p.id);
+    if (paid) { this.set({ s: 'confirming', since: Date.now() }); await this.confirm(paid.hash, paid.account); return; }
     this.startTimer();
     this.set({ s: 'checking' });
     try {
@@ -93,10 +119,13 @@ export class PayFlow {
     try {
       hash = await this.wallet.sendNear({ receiver: p.receiver, amount: p.amount });
     } catch (e) {
-      if (e instanceof WalletRejectedError) this.set({ s: 'rejected' });
-      else this.set({ s: 'error', msg: `The wallet reported a problem: ${(e as Error).message}`, retry: true });
+      if (e instanceof WalletRejectedError) { this.set({ s: 'rejected' }); return; }
+      // we can't tell whether it went out: no quick "try again" button, so nobody sends the same thing twice by accident
+      this.set({ s: 'error', retry: false,
+        msg: `The wallet reported a problem: ${(e as Error).message} Check your wallet's activity: if the transfer went out, wait a minute and reopen this. If not, reopen this to try again.` });
       return;
     }
+    pendingPayment.setSent({ id: p.id, hash, account });
     this.set({ s: 'confirming', since: Date.now() });
     await this.confirm(hash, account);
   }
@@ -107,8 +136,10 @@ export class PayFlow {
     if (p.status === 'confirming') { this.state = { s: 'confirming', since: Date.now() }; void this.poll(false); return; }
     if (p.status === 'pending' && redirectTx) {
       const account = redirectTx.account ?? this.wallet.account;
-      if (account) { this.set({ s: 'confirming', since: Date.now() }); await this.confirm(redirectTx.hash, account); return; }
+      if (account) { pendingPayment.setSent({ id: p.id, hash: redirectTx.hash, account }); this.set({ s: 'confirming', since: Date.now() }); await this.confirm(redirectTx.hash, account); return; }
     }
+    const sent = p.status === 'pending' ? pendingPayment.sent(p.id) : null;
+    if (sent) { this.set({ s: 'confirming', since: Date.now() }); await this.confirm(sent.hash, sent.account); return; }
     if (p.status === 'pending') { this.startTimer(); this.set({ s: 'review' }); return; }
     this.afterStatus(p);
   }
@@ -116,6 +147,8 @@ export class PayFlow {
   async cancel(): Promise<void> {
     const p = this.payment;
     this.stopTimer();
+    // already paid: keep the order and its transfer so the next visit still confirms it
+    if (p && pendingPayment.sent(p.id)) { this.payment = null; this.state = { s: 'review' }; return; }
     if (p && p.status === 'pending' && !p.txHash) { try { await api.cancel(p.id); } catch { /* it expires on its own */ } }
     pendingPayment.clear();
     this.payment = null;
@@ -166,6 +199,8 @@ export class PayFlow {
       pendingPayment.clear(); this.state = { s: 'error', msg: v.error ?? 'The transfer could not be verified on NEAR.', retry: false };
     } else if (v.status === 'pending' && v.error) {
       this.state = { s: 'error', msg: v.error, retry: true };   // wrong/underpaid tx: try again
+    } else if (v.status === 'expired' && v.txHash) {
+      this.state = { s: 'slow' };   // its transfer has not shown up on NEAR yet; the server keeps checking it
     } else if (v.status === 'expired') {
       pendingPayment.clear(); this.state = { s: 'expired' };
     } else if (v.status === 'confirming') {
