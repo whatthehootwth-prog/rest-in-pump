@@ -238,7 +238,7 @@ describe('game server', () => {
     const meta = await fetch(`http://127.0.0.1:${port}/nft/token/${grave.id}-2.json`);
     expect(meta.headers.get('access-control-allow-origin')).toBe('*');
     const body = await json(meta);
-    expect(body.name).toBe('$DOGSHIT — Memorial #002');
+    expect(body.name).toBe('$DOGSHIT Memorial #002');
     expect(body.image).toBe(`https://rip.example/nft/grave/${grave.id}/media.svg`);
     const attr = Object.fromEntries(body.attributes.map((a: { trait_type: string; value: unknown }) => [a.trait_type, a.value]));
     expect(attr).toMatchObject({

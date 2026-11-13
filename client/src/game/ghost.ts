@@ -4,10 +4,10 @@ import type { GraveInfo } from '../../../shared/graves.ts';
 import type { Owl } from '../owl/owl.ts';
 
 /**
- * NPC owls are ghosts: 50-80% opaque with a pale blue tint, each wearing a dead coin's logo (from a real grave here)
+ * NPC owls are ghosts: 25-45% opaque with a pale blue tint, each wearing a dead coin's logo (from a real grave here)
  * printed on its chest. Ghost materials are made once per original material and opacity level, and shared.
  */
-export const GHOST_LEVELS = [0.5, 0.6, 0.7, 0.8] as const;
+export const GHOST_LEVELS = [0.25, 0.35, 0.45] as const;
 const TINT = new THREE.Color(0xc9e6ff);
 const ghostMats = new Map<string, THREE.Material>();
 const matIds = new WeakMap<THREE.Material, number>();

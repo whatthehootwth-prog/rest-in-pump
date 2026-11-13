@@ -25,7 +25,7 @@ import type { GraveField } from '../world/graves.ts';
  * Now and then they say something in a speech bubble.
  */
 
-export const MIN_GHOSTS = 3;
+export const MIN_GHOSTS = 1;
 export const MAX_GHOSTS = 15;
 /** Demo mode (open the game with ?demo): 40 solid ghosts, for videos and screenshots. */
 export const DEMO = typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo');
@@ -111,11 +111,13 @@ export class Npcs {
 
   constructor(scene: THREE.Scene, colliders: Colliders, graves: GraveField) {
     this.scene = scene; this.colliders = colliders; this.graves = graves;
+    // the graveyard starts nearly empty (1-2 ghosts); more fade in one by one, every 10-30 s, up to the target
+    const start = DEMO ? DEMO_GHOSTS : 1 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < start; i++) this.spawn(this.randomSpot(), false);
     this.target = this.pickTarget();
-    for (let i = 0; i < this.target; i++) this.spawn(this.randomSpot(), false);
   }
 
-  /** Most ghosts there can be right now: 15 with one player, about 1.5 fewer per extra player, never under 3. */
+  /** Most ghosts there can be right now: 15 with one player, about 1.5 fewer per extra player, never under 1. */
   private ceiling() { if (DEMO) return DEMO_GHOSTS; return Math.max(MIN_GHOSTS, Math.min(MAX_GHOSTS, Math.round(MAX_GHOSTS - (this.players - 1) * 1.5))); }
   /** A target somewhere in the band under the ceiling, so it is sometimes more and sometimes less. */
   private pickTarget() { if (DEMO) return DEMO_GHOSTS; const hi = this.ceiling(), lo = Math.max(MIN_GHOSTS, hi - 5); return lo + Math.floor(Math.random() * (hi - lo + 1)); }

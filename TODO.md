@@ -52,7 +52,7 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 
 ## Memorial NFTs (built, not deployed)
 
-- [x] NEP-171 contract `contracts/memorial`: one memorial per wallet per grave, "$RUG — Memorial #001", nft_mint event
+- [x] NEP-171 contract `contracts/memorial`: one memorial per wallet per grave, "$RUG Memorial #001", nft_mint event
 - [x] Contract tests run against the compiled wasm (`server/test/contract.test.ts`)
 - [x] Server minter: queued on first offering, idempotent (memorial_of check), retries with backoff, honest "not switched on" state
 - [x] Live metadata JSON with all attributes + artwork that changes with the grave's level, served under /nft

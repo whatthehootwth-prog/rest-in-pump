@@ -66,7 +66,7 @@ export function createNftRoutes(graves: GraveService, log: Logger, publicBaseUrl
         const { memorial: m, grave: g, personalOfferings } = found;
         const { namePrefix, description } = describe(g.meme.symbol, g.meme.contract, g.plot);
         const body = {
-          name: `${namePrefix} — Memorial #${String(m.serial ?? 0).padStart(3, '0')}`,
+          name: `${namePrefix} Memorial #${String(m.serial ?? 0).padStart(3, '0')}`,
           description,
           image: base ? `${base}/nft/grave/${g.id}/media.svg` : `grave/${g.id}/media.svg`,
           external_url: base || undefined,

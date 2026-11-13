@@ -162,7 +162,7 @@ TODO.md                roadmap checklist
 **Memorial NFTs**
 - A wallet's first successful offering to a grave queues that grave's Memorial NFT for the wallet that actually
   signed the payment. Exactly one per wallet per grave, however many offerings it makes (unique in the database
-  *and* enforced by the contract). Title: `$RUG — Memorial #001` (numbered per grave).
+  *and* enforced by the contract). Title: `$RUG Memorial #001` (numbered per grave).
 - The contract (`contracts/memorial`) stores `media = grave/<id>/media.svg` and `reference = token/<id>.json`,
   relative to its `base_uri` (`<PUBLIC_BASE_URL>/nft`). The game serves those live, so every memorial of a grave
   evolves together: the artwork shows the grave's current level, ticker and EXP, and the JSON carries

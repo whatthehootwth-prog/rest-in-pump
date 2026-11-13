@@ -1,4 +1,4 @@
-//! REST IN PUMP — Memorial NFTs.
+//! REST IN PUMP Memorial NFTs.
 //!
 //! A standard NEP-171 NFT contract (core, approvals, enumeration, metadata) with one custom rule:
 //! the game server's minter account mints at most ONE memorial per (grave, receiving wallet).
@@ -82,7 +82,7 @@ impl Contract {
 
     /// Mints the memorial of `receiver_id` for `grave_id`. Minter only; panics if that wallet already got one.
     /// Storage is paid from the contract's own balance, so no deposit is needed.
-    /// The title is "<name_prefix> — Memorial #NNN" (e.g. "$RUG — Memorial #001"); `media` and `reference`
+    /// The title is "<name_prefix> Memorial #NNN" (e.g. "$RUG Memorial #001"); `media` and `reference`
     /// are paths under `base_uri` that the game serves and keeps up to date as the grave evolves.
     pub fn mint_memorial(&mut self, grave_id: u64, receiver_id: AccountId, name_prefix: String, description: String) -> Token {
         require!(env::predecessor_account_id() == self.minter_id, "Only the minter can mint memorials");
@@ -97,7 +97,7 @@ impl Contract {
 
         let now = env::block_timestamp_ms().to_string();
         let metadata = TokenMetadata {
-            title: Some(format!("{name_prefix} — Memorial #{serial:03}")),
+            title: Some(format!("{name_prefix} Memorial #{serial:03}")),
             description: Some(description),
             media: Some(format!("grave/{grave_id}/media.svg")),
             media_hash: None,
@@ -286,7 +286,7 @@ mod tests {
         assert_eq!(c.memorial_of(9, accounts(2)), None);
         assert_eq!(c.nft_total_supply(), U128(3));
         let meta = c.nft_token("7-1".into()).unwrap().metadata.unwrap();
-        assert_eq!(meta.title.as_deref(), Some("$RUG — Memorial #001"));
+        assert_eq!(meta.title.as_deref(), Some("$RUG Memorial #001"));
         assert_eq!(meta.media.as_deref(), Some("grave/7/media.svg"));
         assert_eq!(meta.reference.as_deref(), Some("token/7-1.json"));
         assert!(meta.extra.unwrap().contains("\"serial\":1"));

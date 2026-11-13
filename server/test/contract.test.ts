@@ -106,8 +106,8 @@ describe.skipIf(!hasWasm)('Memorial NFT contract (compiled wasm)', () => {
     const a = mint(7, 'alice.near'), b = mint(7, 'bob.near'), c = mint(9, 'alice.near', '$DOG');
     expect([a.token_id, b.token_id, c.token_id]).toEqual(['7-1', '7-2', '9-1']);
     expect(a.owner_id).toBe('alice.near');
-    expect(a.metadata.title).toBe('$RUG — Memorial #001');
-    expect(b.metadata.title).toBe('$RUG — Memorial #002');
+    expect(a.metadata.title).toBe('$RUG Memorial #001');
+    expect(b.metadata.title).toBe('$RUG Memorial #002');
     expect(a.metadata.media).toBe('grave/7/media.svg');
     expect(a.metadata.reference).toBe('token/7-1.json');
     expect(vm.call('memorial_of', { grave_id: 7, account_id: 'bob.near' }, { predecessor: 'x.near' })).toBe('7-2');
