@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { PLOTS } from '../../../shared/graves.ts';
 import { createOwl, type Owl } from '../owl/owl.ts';
-import { GHOST_LEVELS, GhostFade, addCoinBadge, ghostify } from './ghost.ts';
+import { GhostFade, addCoinBadge } from './ghost.ts';
 import { NameTag } from '../ui/nametag.ts';
 import { damp, lerpAngle } from '../util/math.ts';
 import { resolveCollisions, type Colliders } from '../world/collision.ts';
@@ -9,7 +9,7 @@ import type { GraveField } from '../world/graves.ts';
 
 /**
  * Nameless NPC owls, purely cosmetic and local to each player's screen. There are always enough of them that the
- * Ghost owls, purely cosmetic and local to each player's screen. There are MIN_GHOSTS to MAX_GHOSTS of them: more when
+ * NPC owls (solid, like players, each wearing a dead coin's logo), purely cosmetic and local to each player's screen. There are MIN_GHOSTS to MAX_GHOSTS of them: more when
  * few players are online, fewer when many are, and the number drifts up and down over time. Every 10 to 30 seconds one
  * ghost fades in somewhere or rises up and vanishes.
  *
@@ -82,7 +82,7 @@ interface Npc {
   rowIndex: number;
   /** Whether it already has its coin logo (added once graves are loaded). */
   badged: boolean;
-  /** How see-through this ghost is (one of GHOST_LEVELS). */
+  /** Opacity of its coin badge (NPCs are solid now, so always 1). */
   alpha: number;
   /** Fading in (dir 1) or vanishing (dir -1); null once fully there. */
   fade: { ctl: GhostFade; k: number; dir: 1 | -1 } | null;
@@ -111,8 +111,8 @@ export class Npcs {
 
   constructor(scene: THREE.Scene, colliders: Colliders, graves: GraveField) {
     this.scene = scene; this.colliders = colliders; this.graves = graves;
-    // the graveyard starts nearly empty (1-2 ghosts); more fade in one by one, every 10-30 s, up to the target
-    const start = DEMO ? DEMO_GHOSTS : 1 + Math.floor(Math.random() * 2);
+    // the graveyard starts nearly empty (1-3 owls); more fade in one by one, every 10-30 s, up to the target
+    const start = DEMO ? DEMO_GHOSTS : 1 + Math.floor(Math.random() * 3);
     for (let i = 0; i < start; i++) this.spawn(this.randomSpot(), false);
     this.target = this.pickTarget();
   }
@@ -133,8 +133,7 @@ export class Npcs {
   private spawn(at: THREE.Vector3, fadeIn = true) {
     const owl = createOwl();
     owl.setWalk(Math.floor(Math.random() * 9));
-    const alpha = DEMO ? 1 : pick(GHOST_LEVELS);
-    if (!DEMO) ghostify(owl, alpha);   // in demo mode they look like normal player owls
+    const alpha = 1;   // solid, like a player's owl (they still fade in and out when they come and go)
     const gl = this.graves.graves();
     if (gl.length) addCoinBadge(owl, pick(gl), alpha);   // before any fade, so the logo fades in with it
     let fade: Npc['fade'] = null;

@@ -13,6 +13,19 @@ export class WalletRejectedError extends Error {}
 type Loaded = { selector: WalletSelector; modal: WalletSelectorModal; actions: typeof import('@near-js/transactions').actionCreators };
 const SELECTED_KEY = 'near-wallet-selector:selectedWalletId';
 
+/**
+ * The grave and gift dialogs open with showModal(), which puts them in the browser's top layer: above every
+ * z-index, and everything outside them can't be clicked. So the wallet picker moves inside the open dialog
+ * (and back to the page when there is none), which keeps it in front and clickable.
+ */
+function bringPickerToFront(): void {
+  const picker = document.getElementById('near-wallet-selector-modal');
+  if (!picker) return;
+  const open = [...document.querySelectorAll('dialog')].filter((d) => d.open && d.matches(':modal'));
+  const host = open[open.length - 1] ?? document.body;
+  if (picker.parentElement !== host) host.appendChild(picker);
+}
+
 export class Wallet {
   account: string | null = null;
   private loaded: Promise<Loaded> | null = null;
@@ -36,6 +49,7 @@ export class Wallet {
       const sub = modal.on('onHide', ({ hideReason }) => {
         if (hideReason === 'user-triggered') { offAcc(); sub.remove(); resolve(this.account); }
       });
+      bringPickerToFront();
       modal.show();
     });
   }
