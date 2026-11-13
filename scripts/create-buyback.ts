@@ -79,7 +79,7 @@ async function main() {
     console.log('Cancelled. Nothing was sent.'); return;
   }
 
-  // the server needs full access: it sends NEAR, wraps it, swaps on Ref and sends WTH to holders
+  // the server needs full access: it sends NEAR, wraps it, swaps on RHEA and sends WTH to holders
   const serverKey = KeyPair.fromRandom('ed25519');
   const out = await new Account(owner, provider, signer).signAndSendTransaction({
     receiverId: buyback,

@@ -207,10 +207,10 @@ All grave and offering revenue (NEAR) goes to a dedicated buyback account. Every
 when the NEAR above a small reserve is worth `BUYBACK_THRESHOLD_USD` ($20), it runs a round (`server/src/buyback.ts`):
 
 1. `BUYBACK_TEAM_PERCENT` (20%) goes to `BUYBACK_TEAM_WALLET` (whatthehoot.near).
-2. The rest buys WTH on Ref Finance's WTH/NEAR DCL pool (`wrap.near|wth-0b2227.launchpad.justhoot.near|10000`):
+2. The rest buys WTH on RHEA's WTH/NEAR DCL pool (`wrap.near|wth-0b2227.launchpad.justhoot.near|10000`):
    wrap NEAR, then `ft_transfer_call` to `dclv2.ref-labs.near` with a `Swap` message and a 2% minimum-output limit.
 3. The WTH bought is sent to holders in proportion to their holdings, in batches of 35 `ft_transfer`s. Holder list:
-   FastNear's top holders. Left out: holders below `BUYBACK_MIN_HOLDING_WTH` (100,000), the Ref pools,
+   FastNear's top holders. Left out: holders below `BUYBACK_MIN_HOLDING_WTH` (100,000), the RHEA pools,
    `intents.near`, the justhoot launchpad / router / token contracts, the buyback account and the team wallet,
    plus anything in `BUYBACK_EXCLUDE`. (root.near is a holder and is included.)
 

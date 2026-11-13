@@ -11,7 +11,7 @@ import type { NearPrice } from './price.ts';
 /**
  * Buyback rounds: game revenue (NEAR) collects in the buyback account; when it is worth THRESHOLD_USD,
  *   1. TEAM_PERCENT of it goes to the WTH wallet,
- *   2. the rest buys WTH on Ref Finance (WTH/NEAR DCL pool) with a slippage limit,
+ *   2. the rest buys WTH on RHEA (WTH/NEAR DCL pool) with a slippage limit,
  *   3. the WTH bought is sent to WTH holders in proportion to their holdings (contracts, pools and small
  *      holders left out), in batches of ft_transfer.
  *
@@ -123,7 +123,7 @@ export class Buyback {
         await c.ensureRegistered();
         const before = await c.wthBalance();
         const quote = await c.quoteWth(BigInt(r.near_buy));
-        if (quote <= 0n) return this.stop(id, 'failed', 'Ref returned no quote for the WTH/NEAR pool.');
+        if (quote <= 0n) return this.stop(id, 'failed', 'RHEA returned no quote for the WTH/NEAR pool.');
         const minOut = (quote * (10_000n - SLIPPAGE_BPS)) / 10_000n;
         this.setRound(id, { step: 'swap_sending' });
         const tx = await this.call(() => c.swapNearForWth(BigInt(r.near_buy), minOut));

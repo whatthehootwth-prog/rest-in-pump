@@ -165,7 +165,7 @@ Built and tested, switched off until the buyback account exists.
 1. All grave and gift revenue (NEAR) collects in a dedicated buyback account.
 2. Every 10 minutes the server checks it. When the NEAR above a small reserve is worth $20 (`BUYBACK_THRESHOLD_USD`), a round runs.
 3. 20% (`BUYBACK_TEAM_PERCENT`) goes to `whatthehoot.near`.
-4. The rest buys WTH on Ref Finance's WTH/NEAR DCL pool, with a 2% minimum-output limit.
+4. The rest buys WTH on RHEA's WTH/NEAR DCL pool, with a 2% minimum-output limit.
 5. The WTH bought is shared with holders in proportion to their holdings, in batches of 35 transfers. Holders under 100,000 WTH, pools, exchanges and project wallets are left out.
 
 Safety: every step is recorded before it is sent. A definite failure is retried next round. An unknown outcome (for example an RPC timeout after sending) stops everything as `needs_check` until someone looks. History is public at `/api/buybacks` and in the explainer.

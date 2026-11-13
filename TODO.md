@@ -71,7 +71,7 @@ Add your own items anywhere; keep **(you)** on things only you can do or decide.
 
 ## Buyback rounds (built, not switched on)
 
-- [x] Revenue collects in a buyback account; every $20: 20% to whatthehoot.near, 80% buys WTH on Ref (2% slippage limit)
+- [x] Revenue collects in a buyback account; every $20: 20% to whatthehoot.near, 80% buys WTH on RHEA (2% slippage limit)
 - [x] WTH shared with holders by holding (>= 100,000 WTH; pools, exchanges, project wallets left out; root.near included)
 - [x] Stops for a manual check on any unknown transaction outcome (no double sends); public history in the docs + /api/buybacks
 - [ ] Create buyback.whatthehoot.near, fund ~1 NEAR, set TREASURY_ACCOUNT / BUYBACK_ACCOUNT_ID / BUYBACK_PRIVATE_KEY (you)

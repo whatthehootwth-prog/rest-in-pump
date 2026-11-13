@@ -37,7 +37,7 @@ beforeEach(() => {
   db = openDb(':memory:');
   chain = new FakeChain();
   chain.holderList = [
-    { account: DCL, balance: W(541_000_000) },                    // the Ref pool: left out
+    { account: DCL, balance: W(541_000_000) },                    // the RHEA pool: left out
     { account: 'root.near', balance: W(134_000_000) },            // a holder: included
     { account: 'intents.near', balance: W(22_000_000) },          // left out
     { account: 'whatthehoot.near', balance: W(18_000_000) },      // the team wallet: left out
