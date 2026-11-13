@@ -963,3 +963,18 @@ dialog.game-dlg::backdrop { background: rgba(5, 4, 8, 0.62); backdrop-filter: bl
   100% { transform: scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { .chat-form.flash input { animation: none; } }
+
+/* ---------------------------------------------------------------- coin suggestions under the grave field */
+.sugg-wrap { position: relative; flex: 1; min-width: 0; display: flex; }
+.sugg-wrap input { width: 100%; }
+.sugg { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; right: 0; margin: 0; padding: 4px; list-style: none; max-height: 218px; overflow-y: auto; background: #14131a; border: 1px solid #3a3744; border-radius: 10px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55); }
+.sugg[hidden] { display: none; }
+.sugg li { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 7px; cursor: pointer; }
+.sugg li:hover, .sugg li.on { background: #262331; }
+.sugg li img, .sugg li .meme-ph { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex: none; font-size: 13px; }
+.sugg-txt { display: grid; min-width: 0; flex: 1; }
+.sugg-top { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.sugg-top b { color: var(--focus); white-space: nowrap; }
+.sugg-name, .sugg-txt .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sugg-name { color: var(--text); font-size: 13px; }
+.sugg-tag { flex: none; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: #3a2226; color: #f0a59d; }

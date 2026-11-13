@@ -122,6 +122,11 @@ export class GraveService {
     return { graves: rows.map((r) => graveInfo(r, recent.get(r.id) ?? [], counts.get(r.id) ?? {})), reserved: this.reservedPlots() };
   }
 
+  /** Every buried coin (for the coin search). */
+  buried(): { chain: string; contract: string; name: string; symbol: string; plot: number }[] {
+    return this.d.db.prepare('SELECT chain, contract, name, symbol, plot FROM graves').all() as { chain: string; contract: string; name: string; symbol: string; plot: number }[];
+  }
+
   reservedPlots(): number[] {
     const rows = this.d.db.prepare("SELECT plot FROM payments WHERE kind = 'grave' AND status IN ('pending','confirming') ORDER BY plot").all() as { plot: number }[];
     return rows.map((r) => r.plot);

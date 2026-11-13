@@ -1,5 +1,7 @@
 import type { ChainId, GraveDetail, GraveInfo, GravesSnapshot, MemeInfo, OfferingItem, PaymentView, PriceConfig } from '../../../shared/graves.ts';
 
+export interface CoinSuggestion { contract: string; name: string; symbol: string; icon: string | null; plot: number | null }
+
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
@@ -50,6 +52,9 @@ async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown):
 export const api = {
   config: () => request<PriceConfig>('GET', '/config'),
   graves: () => request<GravesSnapshot>('GET', '/graves'),
+  /** Coins matching a name, ticker or address, for the grave dialog's suggestions. */
+  search: (chain: ChainId, q: string) =>
+    request<{ results: CoinSuggestion[] }>('GET', `/search?chain=${encodeURIComponent(chain)}&q=${encodeURIComponent(q)}`),
   meme: (chain: ChainId, contract: string) =>
     request<{ meme: MemeInfo; grave: GraveInfo | null }>('GET', `/meme?chain=${encodeURIComponent(chain)}&contract=${encodeURIComponent(contract)}`),
   grave: (id: number, account: string | null) =>

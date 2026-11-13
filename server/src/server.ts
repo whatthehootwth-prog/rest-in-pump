@@ -16,6 +16,7 @@ import { sillyName } from './names.ts';
 import { Buyback, nearBuybackChain, type BuybackChain } from './buyback.ts';
 import { parseUnits } from '../../shared/graves.ts';
 import { createSolanaLookup } from './solana.ts';
+import { createTokenSearch } from './search.ts';
 import { createNearRpc, fetchFtMetadata, nearBalance, verifyNearTransfer, type MetadataResult, type TransferCheck, type TransferResult } from './near.ts';
 import {
   MAX_CLIENT_MESSAGE_BYTES, PROTOCOL_VERSION, parseClientMessage, sanitizeChat,
@@ -47,6 +48,8 @@ export interface ServerOptions {
   near?: { lookup(contract: string): Promise<MetadataResult>; verify(c: TransferCheck): Promise<TransferResult> };
   /** Replaces the Solana token lookup. */
   solanaLookup?: (mint: string) => Promise<MetadataResult>;
+  /** Replaces fetch for the coin search (RHEA list, Jupiter, logos). */
+  searchFetch?: typeof fetch;
   db?: Db;
   /** Replaces the buyback chain (turns buyback on with test settings). */
   buybackChain?: BuybackChain;
@@ -129,7 +132,9 @@ export async function startServer(cfg: Config, log: Logger, opts: ServerOptions 
     (cfg.trustProxy ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0]?.trim() : '') || req.socket.remoteAddress || '?';
   const previewLimit = createRateLimiter({ perMin: 30, burst: 15 });
   const nft = createNftRoutes(graves, log.child({ mod: 'nft' }), cfg.publicBaseUrl, cfg.nftContract, (req) => previewLimit(clientIp(req)));
-  const api = createApi(graves, log.child({ mod: 'api' }), clientIp, opts.balance ?? ((account) => nearBalance(rpc, account)), () => buybackInfo());
+  const tokens = createTokenSearch({ buried: () => graves.buried(), fetchImpl: opts.searchFetch });
+  if (!opts.searchFetch && cfg.dbPath !== ':memory:') tokens.warm();   // download the NEAR list at startup (not in tests)
+  const api = createApi(graves, log.child({ mod: 'api' }), clientIp, opts.balance ?? ((account) => nearBalance(rpc, account)), () => buybackInfo(), (chain, q) => tokens.search(chain, q));
   const clients = new Set<Client>();
   const byPlayer = new Map<string, Client>();
   const dirtyRooms = new Set<string>();

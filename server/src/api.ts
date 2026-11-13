@@ -1,6 +1,7 @@
 import type http from 'node:http';
 import type { GraveService, GraveError } from './graves.ts';
 import type { Logger } from './log.ts';
+import type { Suggestion } from './search.ts';
 import { isTxHash } from './near.ts';
 import { NEAR_ACCOUNT_RE } from '../../shared/graves.ts';
 
@@ -11,6 +12,7 @@ import { NEAR_ACCOUNT_RE } from '../../shared/graves.ts';
  *   GET  /api/config                    USD prices, NEAR amounts at the live price, treasury, whether minting is on
  *   GET  /api/graves                    all graves + reserved plots
  *   GET  /api/graves/:id?account=       one grave, recent offerings, the account's memorial + offering count
+ *   GET  /api/search?chain=&q=          up to 6 coins matching a name, ticker or address (dead ones too)
  *   GET  /api/meme?chain=&contract=     resolve a meme (name/symbol/logo) and whether it has a grave
  *   POST /api/payments                  { plot, chain, contract, message } hold a plot + meme, get the transfer
  *   POST /api/offerings                 { graveId, item } get the transfer for an offering (priced by the server)
@@ -49,8 +51,9 @@ export function sessionOf(req: http.IncomingMessage): string | null {
   return typeof v === 'string' && SESSION_RE.test(v) ? v : null;
 }
 
-export function createApi(graves: GraveService, log: Logger, clientIp: (req: http.IncomingMessage) => string, balanceOf: (account: string) => Promise<string | null>, buybacks: () => unknown = () => ({ enabled: false, rounds: [] })) {
+export function createApi(graves: GraveService, log: Logger, clientIp: (req: http.IncomingMessage) => string, balanceOf: (account: string) => Promise<string | null>, buybacks: () => unknown = () => ({ enabled: false, rounds: [] }), search?: (chain: 'near' | 'solana', q: string) => Promise<Suggestion[]>) {
   const limited = createRateLimiter(RATE);
+  const searchLimited = createRateLimiter({ perMin: 60, burst: 30 });   // typing sends a few, so it has its own bucket
 
   const send = (res: http.ServerResponse, status: number, body: unknown) => {
     res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
@@ -80,6 +83,14 @@ export function createApi(graves: GraveService, log: Logger, clientIp: (req: htt
       if (req.method === 'GET' && parts[1] === 'graves' && parts.length === 3) {
         const out = graves.detail(parts[2], url.searchParams.get('account'));
         if (isErr(out)) fail(res, out); else send(res, 200, out);
+        return true;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/search') {
+        if (searchLimited(ip)) { send(res, 429, { error: { code: 'rate_limited', message: 'Too many searches. Wait a moment.' } }); return true; }
+        const chain = url.searchParams.get('chain');
+        if (chain !== 'near' && chain !== 'solana') { send(res, 400, { error: { code: 'bad_chain', message: 'Search works for NEAR and Solana coins.' } }); return true; }
+        send(res, 200, { results: search ? await search(chain, url.searchParams.get('q') ?? '') : [] });
         return true;
       }
 

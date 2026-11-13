@@ -2,15 +2,15 @@ import {
   CHAINS, MESSAGE_MAX, chainName, memeAddress, nearLabel, sanitizeMessage,
   type ChainId, type GraveInfo, type MemeInfo, type PaymentView, type PriceConfig,
 } from '../../../shared/graves.ts';
-import { api } from '../net/api.ts';
+import { api, type CoinSuggestion } from '../net/api.ts';
 import type { Wallet } from '../wallet/wallet.ts';
 import { h, shortAccount } from './dom.ts';
 import { PayFlow } from './payflow.ts';
 
 /** What the address field says for each chain that can have graves. */
 const CHAIN_TEXT: Record<ChainId, { label: string; placeholder: string; hint: string; bad: string }> = {
-  near: { label: 'Meme token contract', placeholder: 'token.example.near', hint: 'Paste the token contract. We read the name and logo straight from NEAR.', bad: 'That does not look like a NEAR token contract address (e.g. token.example.near).' },
-  solana: { label: 'Meme token mint address', placeholder: 'e.g. DezXAZ8z7Pnrn…B263', hint: 'Paste the token mint address (the CA). We read the name and logo from Solana. You still pay in NEAR.', bad: 'That does not look like a Solana token address. It is 32 to 44 letters and numbers.' },
+  near: { label: 'Meme token', placeholder: 'Type its name or ticker, or paste the contract', hint: "Type the coin's name or ticker and pick it, or paste the token contract. Dead coins show up too.", bad: 'That does not look like a NEAR token contract address (e.g. token.example.near).' },
+  solana: { label: 'Meme token', placeholder: 'Type its name or ticker, or paste the CA', hint: "Type the coin's name or ticker and pick it, or paste the mint address (the CA). You still pay in NEAR.", bad: 'That does not look like a Solana token address. It is 32 to 44 letters and numbers.' },
   base: { label: 'Token contract', placeholder: '', hint: 'Base memes are coming soon.', bad: 'Base memes are coming soon.' },
   ethereum: { label: 'Token contract', placeholder: '', hint: 'Ethereum memes are coming soon.', bad: 'Ethereum memes are coming soon.' },
 };
@@ -38,6 +38,12 @@ export class CreateGraveDialog {
   private lookup: Lookup = { s: 'idle' };
   private message = '';
   private wordsError = false;
+  /** Coin suggestions under the field while typing. */
+  private sugg: CoinSuggestion[] = [];
+  private suggOn = -1;
+  private suggTimer: ReturnType<typeof setTimeout> | null = null;
+  private suggSeq = 0;
+  private readonly suggEl = h('ul', { id: 'grave-sugg', class: 'sugg', role: 'listbox', 'aria-label': 'Matching coins', hidden: true });
   /** Left side: the grave's Memorial NFT, always on screen (kept between renders so it doesn't flicker). */
   private readonly side = {
     img: h('img', { alt: 'Memorial NFT preview', width: 1080, height: 1380 }) as HTMLImageElement,
@@ -91,10 +97,12 @@ export class CreateGraveDialog {
   private reset(plot: number) {
     this.flow.reset();
     this.plot = plot; this.step = 'meme'; this.lookup = { s: 'idle' }; this.message = ''; this.contract = ''; this.wordsError = false;
+    this.clearSugg();
   }
 
   /** Step 1's main button. Empty or malformed address: say so on the field. Found: straight on to the last words. */
   private async find() {
+    this.clearSugg();
     if (!this.contract.trim()) {
       this.lookup = { s: 'error', msg: 'Paste the token address first.', field: true };
       this.render(); this.focus('#grave-contract'); return;
@@ -129,6 +137,68 @@ export class CreateGraveDialog {
       () => api.createGrave({ plot: this.plot, chain: this.chain, contract: this.contract, message }),
       (p) => p.kind === 'grave' && p.plot === this.plot && p.meme.contract === this.contract && p.message === message,
     );
+  }
+
+  // ------------------------------------------------------------------ coin suggestions
+
+  /** Searches a moment after typing stops. A full address still works: it is matched like any other text. */
+  private querySugg() {
+    if (this.suggTimer) clearTimeout(this.suggTimer);
+    const q = this.contract.trim(), chain = this.chain, seq = ++this.suggSeq;
+    if (q.replace(/^\$+/, '').length < 2) { this.sugg = []; this.drawSugg(); return; }
+    this.suggTimer = setTimeout(async () => {
+      let results: CoinSuggestion[] = [];
+      try { results = (await api.search(chain, q)).results; } catch { /* the field still takes a pasted address */ }
+      if (seq !== this.suggSeq || this.step !== 'meme' || !this.dlg.open) return;
+      this.sugg = results; this.suggOn = -1; this.drawSugg();
+    }, 250);
+  }
+
+  private clearSugg() {
+    if (this.suggTimer) clearTimeout(this.suggTimer);
+    this.suggSeq++; this.sugg = []; this.suggOn = -1; this.drawSugg();
+  }
+
+  private drawSugg() {
+    const el = this.suggEl;
+    el.hidden = !this.sugg.length;
+    const input = this.body.querySelector('#grave-contract');
+    input?.setAttribute('aria-expanded', this.sugg.length ? 'true' : 'false');
+    el.replaceChildren(...this.sugg.map((s, i) => h('li', {
+      id: `grave-sugg-${i}`, role: 'option', 'aria-selected': i === this.suggOn ? 'true' : 'false', class: i === this.suggOn ? 'on' : '',
+      onmousedown: (e: Event) => e.preventDefault(),   // keep focus in the field
+      onclick: () => this.pickSugg(i),
+    },
+      s.icon ? h('img', { src: s.icon, alt: '', width: 28, height: 28 }) : h('span', { class: 'meme-ph' }, (s.symbol || '?').slice(0, 1).toUpperCase()),
+      h('span', { class: 'sugg-txt' },
+        h('span', { class: 'sugg-top' }, h('b', {}, `$${s.symbol}`), h('span', { class: 'sugg-name' }, s.name)),
+        h('span', { class: 'mono small muted' }, shortAddr(s.contract))),
+      s.plot !== null ? h('span', { class: 'sugg-tag' }, `buried · plot #${s.plot}`) : null)));
+    if (this.suggOn >= 0) input?.setAttribute('aria-activedescendant', `grave-sugg-${this.suggOn}`);
+    else input?.removeAttribute('aria-activedescendant');
+  }
+
+  private pickSugg(i: number) {
+    const s = this.sugg[i];
+    if (!s) return;
+    this.contract = s.contract;
+    const input = this.body.querySelector('#grave-contract') as HTMLInputElement | null;
+    if (input) input.value = s.contract;
+    void this.find();
+  }
+
+  private suggKey(e: KeyboardEvent) {
+    const n = this.sugg.length;
+    if (e.key === 'ArrowDown' && n) { e.preventDefault(); this.suggOn = (this.suggOn + 1) % n; this.drawSugg(); return; }
+    if (e.key === 'ArrowUp' && n) { e.preventDefault(); this.suggOn = (this.suggOn - 1 + n) % n; this.drawSugg(); return; }
+    if (e.key === 'Escape' && n) { e.preventDefault(); e.stopPropagation(); this.clearSugg(); return; }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // Enter picks the highlighted coin, or the top match when the text is not an address
+      if (this.suggOn >= 0) this.pickSugg(this.suggOn);
+      else if (!memeAddress(this.chain, this.contract) && n) this.pickSugg(0);
+      else void this.find();
+    }
   }
 
   // ------------------------------------------------------------------ rendering
@@ -175,11 +245,14 @@ export class CreateGraveDialog {
       'aria-label': CHAIN_TEXT[this.chain].label, 'aria-invalid': bad ? 'true' : 'false', class: bad ? 'invalid' : '',
       oninput: (e: Event) => {
         this.contract = (e.target as HTMLInputElement).value;
+        this.querySugg();
         if (this.lookup.s === 'error') { this.lookup = { s: 'idle' }; (e.target as HTMLElement).classList.remove('invalid'); const m = this.body.querySelector('#grave-find-msg'); if (m) { m.className = 'field-msg'; m.textContent = CHAIN_TEXT[this.chain].hint; } }
       },
-      onkeydown: (e: Event) => { if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); void this.find(); } },
+      onkeydown: (e: Event) => this.suggKey(e as KeyboardEvent),
+      onblur: () => setTimeout(() => this.clearSugg(), 150),
+      role: 'combobox', 'aria-autocomplete': 'list', 'aria-controls': 'grave-sugg', 'aria-expanded': 'false',
     });
-    const chainSel = h('select', { 'aria-label': 'Chain', onchange: (e: Event) => { this.chain = (e.target as HTMLSelectElement).value as ChainId; this.lookup = { s: 'idle' }; this.render(); } },
+    const chainSel = h('select', { 'aria-label': 'Chain', onchange: (e: Event) => { this.chain = (e.target as HTMLSelectElement).value as ChainId; this.lookup = { s: 'idle' }; this.clearSugg(); this.render(); this.querySugg(); } },
       ...CHAINS.map((c) => h('option', { value: c.id, disabled: !c.live, selected: c.id === this.chain }, c.live ? c.name : `${c.name} (soon)`)));
     const msg =
       L.s === 'loading' ? h('p', { id: 'grave-find-msg', class: 'field-msg busy-line' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), `Looking it up on ${chainName(this.chain)}…`)
@@ -188,7 +261,7 @@ export class CreateGraveDialog {
       : h('p', { id: 'grave-find-msg', class: 'field-msg' }, CHAIN_TEXT[this.chain].hint);
     const view = h('div', { class: 'dlg-step' },
       h('label', { class: 'lbl', for: 'grave-contract' }, CHAIN_TEXT[this.chain].label),
-      h('div', { class: 'row' }, chainSel, input),
+      h('div', { class: 'row' }, chainSel, h('div', { class: 'sugg-wrap' }, input, this.suggEl)),
       msg);
     const find = h('button', { class: 'btn btn-go', type: 'button', disabled: L.s === 'loading', onclick: () => void this.find() }, L.s === 'loading' ? 'Finding…' : 'Find meme token');
     return [view, [this.closeBtn(), find]];
@@ -267,6 +340,9 @@ export class CreateGraveDialog {
     return [view, [h('div', { class: 'gm-flow' }, flow)]];
   }
 }
+
+/** "abc…xyz" for long addresses; short NEAR names stay whole. */
+function shortAddr(a: string): string { return a.length > 30 ? `${a.slice(0, 12)}…${a.slice(-8)}` : a; }
 
 /** The found coin: logo, name, ticker, chain (and a Change link on step 2). */
 function tokenRow(m: MemeInfo, change?: () => void): Node {
