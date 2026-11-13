@@ -9,6 +9,7 @@
  * Uses DB_PATH (default data/rip.sqlite). Refuses to run with NODE_ENV=production.
  */
 import { openDb, transaction } from '../server/src/db.ts';
+import sharp from 'sharp';
 import { itemExp } from '../shared/graves.ts';
 
 if (process.env.NODE_ENV === 'production') throw new Error('demo-grave refuses to run with NODE_ENV=production');
@@ -54,11 +55,14 @@ if (process.argv.includes('--remove')) {
 const taken = DEMOS.filter((d) => db.prepare('SELECT 1 FROM graves WHERE plot = ?').get(d.plot));
 if (taken.length) throw new Error(`plot(s) ${taken.map((d) => d.plot).join(', ')} already have a real grave`);
 
+// every demo grave wears the $WTH logo (display only)
+const LOGO = 'data:image/webp;base64,' + (await sharp('brand/logo.webp').resize(128, 128).webp({ quality: 85 }).toBuffer()).toString('base64');
+
 const now = Date.now();
 transaction(db, () => {
   for (const [i, d] of DEMOS.entries()) {
     const contract = `${d.sym.toLowerCase()}.demo.restinpump.near`;
-    const meme = { chain: 'near', contract, name: d.name, symbol: d.sym, decimals: 18, icon: null };
+    const meme = { chain: 'near', contract, name: d.name, symbol: d.sym, decimals: 18, icon: LOGO };
     const pid = `${PREFIX}grave-${d.plot}`;
     const message = `Demo grave (level ${i + 1}). Not a real meme, just here so you can see one.`;
     db.prepare(`INSERT INTO payments (id, kind, status, amount, plot, chain, contract, message, meme_json, payer, error, created_at, expires_at, updated_at)
@@ -66,8 +70,8 @@ transaction(db, () => {
       .run(pid, d.plot, contract, message, JSON.stringify(meme), now, now, now);
     const exp = Object.entries(d.items).reduce((a, [item, n]) => a + itemExp(item) * n, 0);
     const r = db.prepare(`INSERT INTO graves (plot, chain, contract, name, symbol, decimals, icon, message, creator, payment_id, created_at, offering_count, exp)
-                          VALUES (?, 'near', ?, ?, ?, 18, NULL, ?, 'demo', ?, ?, ?, ?)`)
-      .run(d.plot, contract, d.name, d.sym, message, pid, now, Object.values(d.items).reduce((a, b) => a + b, 0), exp);
+                          VALUES (?, 'near', ?, ?, ?, 18, ?, ?, 'demo', ?, ?, ?, ?)`)
+      .run(d.plot, contract, d.name, d.sym, LOGO, message, pid, now, Object.values(d.items).reduce((a, b) => a + b, 0), exp);
     const graveId = Number(r.lastInsertRowid);
     // demo offerings, so the piles show (display only; one row per offering, like real ones)
     let k = 0;

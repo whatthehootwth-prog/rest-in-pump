@@ -27,6 +27,29 @@
         "HOST": "0.0.0.0"
       },
       "port": 8787
+    },
+    {
+      "name": "live",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "server/src/index.ts"
+      ],
+      "env": {
+        "NODE_ENV": "production",
+        "HOST": "127.0.0.1",
+        "PORT": "8788",
+        "ALLOWED_ORIGINS": "https://whatthehoot.lol,http://127.0.0.1:8788",
+        "TRUST_PROXY": "1",
+        "DB_PATH": "data/live.sqlite",
+        "TREASURY_ACCOUNT": "whatthehoot.near",
+        "GRAVE_PRICE_USD": "1",
+        "HOLD_MINUTES": "15",
+        "ROOM_CAPACITY": "50",
+        "MAX_ROOMS": "1",
+        "LOG_LEVEL": "info",
+        "PUBLIC_BASE_URL": "https://whatthehoot.lol"
+      },
+      "port": 8788
     }
   ]
 }

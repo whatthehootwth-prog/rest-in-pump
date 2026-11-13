@@ -27,6 +27,9 @@ import type { GraveField } from '../world/graves.ts';
 
 export const MIN_GHOSTS = 3;
 export const MAX_GHOSTS = 15;
+/** Demo mode (open the game with ?demo): 40 solid ghosts, for videos and screenshots. */
+export const DEMO = typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo');
+const DEMO_GHOSTS = 40;
 /** Seconds a ghost takes to fade in or vanish. */
 const FADE_S = 1.8;
 const RADIUS = 0.3;
@@ -113,9 +116,9 @@ export class Npcs {
   }
 
   /** Most ghosts there can be right now: 15 with one player, about 1.5 fewer per extra player, never under 3. */
-  private ceiling() { return Math.max(MIN_GHOSTS, Math.min(MAX_GHOSTS, Math.round(MAX_GHOSTS - (this.players - 1) * 1.5))); }
+  private ceiling() { if (DEMO) return DEMO_GHOSTS; return Math.max(MIN_GHOSTS, Math.min(MAX_GHOSTS, Math.round(MAX_GHOSTS - (this.players - 1) * 1.5))); }
   /** A target somewhere in the band under the ceiling, so it is sometimes more and sometimes less. */
-  private pickTarget() { const hi = this.ceiling(), lo = Math.max(MIN_GHOSTS, hi - 5); return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+  private pickTarget() { if (DEMO) return DEMO_GHOSTS; const hi = this.ceiling(), lo = Math.max(MIN_GHOSTS, hi - 5); return lo + Math.floor(Math.random() * (hi - lo + 1)); }
 
   /** How many real players are in this graveyard (you included): more players, fewer ghosts. */
   setPlayers(n: number) {
@@ -128,8 +131,8 @@ export class Npcs {
   private spawn(at: THREE.Vector3, fadeIn = true) {
     const owl = createOwl();
     owl.setWalk(Math.floor(Math.random() * 9));
-    const alpha = pick(GHOST_LEVELS);
-    ghostify(owl, alpha);
+    const alpha = DEMO ? 1 : pick(GHOST_LEVELS);
+    if (!DEMO) ghostify(owl, alpha);   // in demo mode they look like normal player owls
     const gl = this.graves.graves();
     if (gl.length) addCoinBadge(owl, pick(gl), alpha);   // before any fade, so the logo fades in with it
     let fade: Npc['fade'] = null;

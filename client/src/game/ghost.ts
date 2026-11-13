@@ -23,9 +23,9 @@ function ghostMat(m: THREE.Material, alpha: number): THREE.Material {
   // clone() drops the shader tweaks (rim light, outline hull); keep them
   g.onBeforeCompile = m.onBeforeCompile;
   g.customProgramCacheKey = m.customProgramCacheKey;
-  g.transparent = true;
+  g.transparent = alpha < 1;
   const outline = m.side === THREE.BackSide;
-  g.opacity = m.opacity * (outline ? alpha * 0.7 : alpha);
+  g.opacity = alpha < 1 ? m.opacity * (outline ? alpha * 0.7 : alpha) : m.opacity;
   if (!outline && 'color' in g && g.color instanceof THREE.Color) g.color.lerp(TINT, 0.3);
   // a faint pale-blue glow so they read as ghosts, not grey owls, against the dark ground
   if (!outline && 'emissive' in g && g.emissive instanceof THREE.Color) g.emissive.set(0x6f8fb8).multiplyScalar(0.35);
