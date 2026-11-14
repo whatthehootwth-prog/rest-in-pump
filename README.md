@@ -172,7 +172,13 @@ Configuration lives in environment variables; see [.env.example](.env.example). 
 
 ## Future Development
 
-- Memecoins from more ecosystems (Base and Ethereum are shown in the picker as "soon").
+Planned, not yet built:
+
+- **Ethereum and Base memecoin graves.** Both are already listed in the "Dig a grave" picker as "soon".
+- **Solana and EVM wallet connection,** so players can sign in with the wallet their community already uses.
+- **Cross-chain payments,** so graves and offerings can be paid from other chains while revenue still reaches the treasury on NEAR.
+- **Cross-chain onboarding,** so players from other ecosystems can join without setting up a NEAR wallet first.
+- **Cross-chain Memorial NFTs,** so a memorial can be held on the chain its memecoin lives on.
 - More plots, or additional graveyards once the 40 plots fill.
 - Better discovery of memorials and communities.
 - More social interactions.
