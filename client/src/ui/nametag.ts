@@ -42,6 +42,9 @@ export class NameTag {
     this.draw();
   }
 
+  /** Hides the chat bubble now (the ?film page uses it between shots). */
+  clearBubble() { if (this.bubble) { this.bubble = null; this.draw(); } }
+
   /** Call every frame: hides the bubble when it expires. */
   tick(now: number) {
     if (this.bubble && now > this.bubbleUntil) { this.bubble = null; this.draw(); }

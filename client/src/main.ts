@@ -31,6 +31,8 @@ import { sessionState } from './util/storage.ts';
 const nextFrame = () => new Promise<void>((r) => (document.hidden ? setTimeout(r, 0) : requestAnimationFrame(() => setTimeout(r, 0))));
 
 async function main() {
+  // ?film: the scripted demo film (its own scene and timeline; no server connection)
+  if (new URLSearchParams(location.search).has('film')) { const { runFilm } = await import('./film/film.ts'); await runFilm(); return; }
   // the intro is on screen from the first paint: wire it up before the heavy 3D setup ("What is Rest In Pump?" works at once)
   const landing = new Landing();
   const canvas = document.getElementById('game') as HTMLCanvasElement;

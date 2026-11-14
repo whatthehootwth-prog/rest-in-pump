@@ -30,6 +30,7 @@ const writePref = (k: string, v: boolean) => { try { localStorage.setItem(k, v ?
 export class GameAudio {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
+  private out!: DynamicsCompressorNode;
   private musicBus!: GainNode;
   private sfxBus!: GainNode;
   private noise!: AudioBuffer;
@@ -52,7 +53,7 @@ export class GameAudio {
       this.ctx = ctx;
       const comp = ctx.createDynamicsCompressor();
       comp.threshold.value = -16; comp.ratio.value = 4;
-      this.master = ctx.createGain(); this.master.connect(comp); comp.connect(ctx.destination);
+      this.master = ctx.createGain(); this.master.connect(comp); comp.connect(ctx.destination); this.out = comp;
       this.musicBus = ctx.createGain(); this.musicBus.connect(this.master);
       this.sfxBus = ctx.createGain(); this.sfxBus.connect(this.master);
       this.noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
@@ -67,6 +68,14 @@ export class GameAudio {
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
     if (!this.music) void this.playTrack(this.track);
+  }
+
+  /** A copy of everything the game plays, for recording videos (the ?film page). Call after start(). */
+  recordStream(): MediaStream | null {
+    if (!this.ctx) return null;
+    const d = this.ctx.createMediaStreamDestination();
+    this.out.connect(d);
+    return d.stream;
   }
 
   setMusic(on: boolean) { this.musicOn = on; writePref(PREF.music, on); this.applyLevels(); }

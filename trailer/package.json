@@ -1,0 +1,17 @@
+{
+  "name": "rest-in-pump-trailer",
+  "private": true,
+  "type": "module",
+  "description": "Renders the REST IN PUMP trailer from the game's ?film mode (frame by frame), mixes narration, music and sound, and encodes the MP4.",
+  "scripts": {
+    "voice": "node voice.mjs",
+    "music": "node render.mjs --audio-only",
+    "render": "node render.mjs",
+    "preview": "node render.mjs --from 0 --to 10"
+  },
+  "devDependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "kokoro-js": "^1.2.1",
+    "playwright": "^1.48.2"
+  }
+}

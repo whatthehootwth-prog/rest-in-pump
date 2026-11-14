@@ -94,6 +94,9 @@ export class GraveField {
     this.colliders.circles.push({ x: v.plot.x, z: v.plot.z + (g.level === 4 ? -0.3 : -0.75), r, ...{ graveId: g.id } } as Colliders['circles'][number]);
   }
 
+  /** The 3D grave standing on a plot, if any (the ?film page animates it). */
+  graveObject(plot: number): THREE.Object3D | null { return this.views[plot - 1]?.graveObj ?? null; }
+
   grave(id: number): GraveInfo | null { return this.views.find((v) => v.grave?.id === id)?.grave ?? null; }
 
   setReserved(plots: number[]): void { this.reserved = new Set(plots); }

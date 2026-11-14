@@ -978,3 +978,18 @@ dialog.game-dlg::backdrop { background: rgba(5, 4, 8, 0.62); backdrop-filter: bl
 .sugg-name, .sugg-txt .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sugg-name { color: var(--text); font-size: 13px; }
 .sugg-tag { flex: none; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: #3a2226; color: #f0a59d; }
+
+/* ---------------------------------------------------------------- ?film: the demo film page */
+body.film > *:not(#film-out):not(#film-ui):not(#grave-dlg) { display: none !important; }
+body.film-capture #film-ui { display: none !important; }
+body.film #grave-dlg { zoom: 1.4; }
+body.film #grave-dlg::backdrop { background: rgba(0, 0, 0, 0.28); }
+body.film { background: #000; overflow: hidden; }
+#film-out { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: contain; background: #000; }
+#film-ui { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, 0.45); z-index: 5; }
+#film-ui[hidden] { display: none; }
+.film-card { max-width: 520px; padding: 24px 26px; border-radius: 14px; background: #16151b; border: 1px solid #34313d; color: var(--text); text-align: center; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); }
+.film-card h1 { margin: 0 0 8px; font: 800 24px Georgia, serif; color: var(--focus); }
+.film-card p { margin: 0 0 14px; color: var(--muted); line-height: 1.5; }
+.film-btns { display: flex; gap: 10px; justify-content: center; margin-bottom: 12px; }
+.film-msg { font-size: 13px; margin: 0 !important; }
