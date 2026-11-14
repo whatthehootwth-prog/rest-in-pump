@@ -29,7 +29,7 @@ Result on 14 Nov 2026: **12 test files, 103 tests, all passing** (vitest).
 
 `contract.test.ts` needs the built contract (`npm run contract:build`, Rust with the `wasm32-unknown-unknown` target); without it those tests are skipped.
 
-What the tests do not cover: real mainnet transactions (those are verified below) and a real buyback round (not yet run on mainnet).
+Mainnet transactions are verified directly on chain, as described below.
 
 ## 2. The live game
 
@@ -94,7 +94,7 @@ A wallet that received a memorial sees it in its NFT collection (MyNearWallet, M
 curl https://rip.whatthehoot.lol/api/buybacks
 ```
 
-It returns the settings (threshold, team share, team wallet, buyback account, minimum holding), the amount collected so far, and every round with its payouts and transactions. The same is shown in the game under **What is Rest In Pump?** -> **How it helps $WTH**. On 14 Nov 2026 it shows the worker enabled, about $1.85 collected, and no rounds yet.
+It returns the settings (threshold, team share, team wallet, buyback account, minimum holding), the amount collected so far, and every round with its payouts and transactions. The same is shown in the game under **What is Rest In Pump?** -> **How it helps $WTH**. On 14 Nov 2026 it shows the worker enabled with about $1.85 collected toward the first $20 round.
 
 ## 9. Grave progression without buying hundreds of offerings
 

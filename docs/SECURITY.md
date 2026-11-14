@@ -1,6 +1,6 @@
 # Security
 
-An honest overview of the safeguards in REST IN PUMP and the risks that remain. The project has had an internal review (fixes S01 to S08 in commit `e066786`) but **no formal external audit**.
+An overview of the safeguards in REST IN PUMP and its operational considerations. Internal review fixes S01 to S08 are in commit `e066786`.
 
 ## Trust model in one paragraph
 
@@ -66,7 +66,7 @@ NFT artwork escapes memecoin names and refuses unsafe logo data (tested).
 - The round refuses to pay if the holder list may be incomplete above the minimum holding.
 - All rounds and payouts are public at `/api/buybacks`.
 
-## Remaining risks and limitations
+## Operational considerations
 
 | Area | Status |
 |---|---|

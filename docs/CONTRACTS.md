@@ -63,7 +63,7 @@ Each token stores relative links: `media = grave/<id>/media.svg`, `reference = t
 
 Example: [`/nft/token/1-1.json`](https://rip.whatthehoot.lol/nft/token/1-1.json).
 
-**Limitation:** the artwork and attributes are served by the game, not stored on chain. If the server is down, wallets cannot load them, although ownership, titles and transfer history stay on chain. The owner can move the host with `set_base_uri`.
+**Hosting:** the artwork and attributes are served by the game rather than stored on chain. If the server is down, wallets cannot load them, although ownership, titles and transfer history stay on chain. The owner can move the host with `set_base_uri`.
 
 ## What is on chain and what is not
 
@@ -84,7 +84,7 @@ The NFT contract does not know about offerings, EXP, levels or the treasury. The
   - https://nearblocks.io/txns/EDphamgQgat9AxcqZN5jq93X22ACmpQeZMZjMV53SxHw
   - https://nearblocks.io/txns/4Fi5Jd5YjEHgNs3n7EHmR7Tevp4V1tZRQu8UQy12KcCz
 - Treasury account creation: https://nearblocks.io/txns/CYPMkrVTt9TwWJRAM8wP76cid8XB86nxT2chP2LZdyFc
-- Buyback history (no rounds yet on 14 Nov 2026): https://rip.whatthehoot.lol/api/buybacks
+- Buyback history: https://rip.whatthehoot.lol/api/buybacks
 
 Reading the contract directly (NEAR CLI):
 

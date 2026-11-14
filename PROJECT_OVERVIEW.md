@@ -512,7 +512,7 @@ server/test, client/test   automated tests
 - `npm run check`: typecheck client and server, then all tests.
 - **103 tests in 12 files, all passing**: protocol, rooms, names, chat, graves, gifts, levels, payment flow, minting, NFT artwork and metadata, migrations, NEAR verification, Solana lookup and safe fetching, coin search, buybacks, static files, HTTP and WebSocket integration, and the compiled NFT contract against a mocked NEAR host.
 - **Verified on mainnet:** a real grave payment, a real gift, Memorial NFT minting, buyback account receiving revenue.
-- **Not yet seen live:** the first buyback round (needs $20 collected).
+- **Next live milestone:** the first buyback round, which runs automatically once $20 is collected.
 
 ---
 

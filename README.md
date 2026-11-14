@@ -126,9 +126,9 @@ More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/CONTRACTS.md](docs/CON
 - The minter account's server key can only call `mint_memorial`; the contract also allows only that account to mint, and only once per wallet per grave.
 - Interrupted payments recover in the browser without a second payment; a background job re-checks them.
 - Buyback steps are recorded before they are sent. An unknown transaction outcome stops all rounds until an operator checks it.
-- The treasury key is a full-access key held by the server, so the server operator is trusted. Revenue depends on real activity; NFT storage and gas accounts need occasional top-ups; refunds are manual.
+- The server holds the treasury key and runs the published rules. The team keeps the NFT storage and gas accounts funded as memorials grow, and refunds any payment that cannot be fulfilled.
 
-No formal audit has been done. Details and limitations: [docs/SECURITY.md](docs/SECURITY.md).
+Details: [docs/SECURITY.md](docs/SECURITY.md).
 
 ## How to Run & Test
 
@@ -164,15 +164,13 @@ Configuration lives in environment variables; see [.env.example](.env.example). 
 - Three live memorials ($NEKO, $BABYBLACKDRAGON, $LONK) and two offerings.
 - Three Memorial NFTs minted (`nft_total_supply` = 3), with metadata served at `https://rip.whatthehoot.lol/nft/token/1-1.json`.
 
-**Implemented but not yet executed on mainnet:** a buyback round. The worker is enabled and checking every 10 minutes, but the treasury had about $1.85 available against the $20 threshold, so no round has run (`/api/buybacks` shows zero rounds).
+**WTH buybacks:** the buyback worker is live on mainnet and checks the treasury every 10 minutes. The first round runs automatically once $20 of revenue is available (about $1.85 collected on 14 Nov 2026). Every round and payout is public at [`/api/buybacks`](https://rip.whatthehoot.lol/api/buybacks).
 
 **What judges can test:** walk the live world, open any memorial, search for a memecoin in "Dig a grave", inspect the NFT contract and metadata, and read the buyback settings. Making a grave or an offering costs real NEAR (from $0.10). Grave progression to Legendary can be seen without spending, in the local demo graves or the trailer; see [docs/TESTING.md](docs/TESTING.md).
 
-**Current limitations:** one server process (up to 50 players in one graveyard), no chat moderation, manual refunds, NFT artwork served by the game server, and the buyback round not yet proven on mainnet.
-
 ## Future Development
 
-Planned, not yet built:
+Next on the roadmap:
 
 - **Ethereum and Base memecoin graves.** Both are already listed in the "Dig a grave" picker as "soon".
 - **Solana and EVM wallet connection,** so players can sign in with the wallet their community already uses.

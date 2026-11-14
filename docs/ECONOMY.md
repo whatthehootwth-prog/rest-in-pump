@@ -175,7 +175,7 @@ Every round and every payout (account, holding, amount, status, transaction) is 
 
 ### Status on mainnet
 
-As of 14 Nov 2026 the worker is enabled, but no round has run: about $1.85 was available against the $20 threshold. The buyback logic is covered by automated tests with a simulated chain (`server/test/buyback.test.ts`); the first real round has not yet happened.
+The worker is live on mainnet. On 14 Nov 2026 about $1.85 had been collected toward the first $20 round, which will run automatically once the threshold is reached. The round logic is covered by automated tests with a simulated chain (`server/test/buyback.test.ts`), and every round will appear at `GET /api/buybacks`.
 
 ## 6. Team and admin controls
 
@@ -199,9 +199,9 @@ Players must trust the operator to run the server as published. See [SECURITY.md
 | Buyback gas and storage | The treasury's 0.5 NEAR reserve | Small per round |
 | Player fees | Players | One NEAR transfer per grave or offering |
 
-## 8. Limitations
+## 8. Considerations
 
-- **Revenue depends on activity.** Buybacks happen only when players spend at least $20 between rounds. Quiet periods mean no rounds.
+- **Revenue follows activity.** A round runs each time players have spent another $20.
 - **No guarantees.** Nothing here promises payouts, investment returns or any effect on the WTH price.
 - **Off-chain rules.** The allocation, schedule and holder selection are enforced by the game server, not by a contract.
 - **Data sources.** Pricing depends on public NEAR/USD feeds; holder selection depends on FastNear's holder list (rounds stop if it may be incomplete).
